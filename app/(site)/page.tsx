@@ -12,10 +12,10 @@ import {
 import { PageShell } from "@/components/site/page-shell";
 
 const highlightStats = [
-  { label: "Active squads", value: "12" },
-  { label: "Weekly events", value: "18" },
+  { label: "Communities", value: "2" },
+  { label: "Active Sherpas", value: "0+" },
+  { label: "Sessions completed", value: "0+" },
   { label: "Guides & playbooks", value: "46" },
-  { label: "Core games", value: "3" },
 ];
 
 const pillars = [
@@ -33,6 +33,11 @@ const pillars = [
     title: "LFG Boards",
     description:
       "Structured groups with roles, time windows, and intent so every run starts aligned.",
+  },
+  {
+    title: "Sherpa Hub",
+    description:
+      "Structured mentorship with Guardian Oath principles, Oathkeeper scoring, and session management for teaching and learning.",
   },
   {
     title: "Guides & Knowledge",
@@ -60,21 +65,29 @@ const integrations = [
   },
 ];
 
-const roadmap = [
+const roadmap: Array<{
+  phase: string;
+  title: string;
+  status?: "complete" | "next" | "planned";
+  items: string[];
+}> = [
   {
     phase: "Phase 1",
     title: "Community OS MVP",
-    items: ["Discord auth + role sync", "Events + LFG", "Guides + announcements"],
+    status: "complete",
+    items: ["Discord auth + role sync", "Events + LFG", "Guides + announcements", "Multi-community foundation"],
   },
   {
     phase: "Phase 2",
-    title: "Destiny 2 Deep Integration",
-    items: ["Bungie OAuth", "Readiness views", "Participation summaries"],
+    title: "Sherpa Hub System",
+    status: "complete",
+    items: ["Sherpa applications", "Request system", "Session management", "Oathkeeper scoring", "Guardian Oath"],
   },
   {
     phase: "Phase 3",
-    title: "Multi-Game Expansion",
-    items: ["Multi-community support", "Unified roster", "Cross-game scheduling"],
+    title: "Sherpa Enhancements",
+    status: "next",
+    items: ["Oathbreaker penalties", "Oathkeeper badges", "Vote to resign", "Admin review interface"],
   },
 ];
 
@@ -100,19 +113,22 @@ export default function HomePage() {
               Community OS
             </Badge>
             <h1 className="font-display text-4xl font-semibold leading-tight md:text-5xl">
-              Jupiter's Girth is a community built around respect, coordination,
-              and the time we share together.
+              Multi-community platform built around respect, coordination,
+              teaching, and the time we share together.
             </h1>
             <p className="text-base text-muted-foreground md:text-lg">
-              Games change. Communities last. We organize, teach, and show up
-              prepared, so every session feels worth it.
+              Games change. Communities last. We organize, teach, mentor, and show up
+              prepared, so every session feels worth it. Supporting Jupiter's Girth and Sherpa Hub.
             </p>
             <div className="flex flex-wrap gap-3">
               <Button asChild size="lg">
                 <Link href="/protected">Enter the community</Link>
               </Button>
               <Button asChild variant="outline" size="lg">
-                <Link href="/guides">Explore the knowledge base</Link>
+                <Link href="/sherpa">Explore Sherpa Hub</Link>
+              </Button>
+              <Button asChild variant="outline" size="lg">
+                <Link href="/guides">Knowledge base</Link>
               </Button>
             </div>
           </div>
@@ -155,8 +171,10 @@ export default function HomePage() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <p>Events and LFG are structured, not buried.</p>
+            <p>Sherpa Hub enables structured teaching and mentorship with Guardian Oath principles.</p>
             <p>Guides and callouts stay accessible.</p>
             <p>Roles keep leadership, mentoring, and availability visible.</p>
+            <p>Multi-community support connects Jupiter's Girth and Sherpa Hub seamlessly.</p>
           </CardContent>
         </Card>
         <Card className="border-border/60 bg-card/80">
@@ -190,7 +208,7 @@ export default function HomePage() {
             <Link href="/events">See the calendar</Link>
           </Button>
         </div>
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {pillars.map((pillar) => (
             <Card key={pillar.title} className="border-border/60 bg-card/75">
               <CardHeader>
@@ -248,11 +266,40 @@ export default function HomePage() {
         </div>
         <div className="grid gap-6 lg:grid-cols-3">
           {roadmap.map((phase) => (
-            <Card key={phase.phase} className="border-border/60 bg-card/75">
+            <Card 
+              key={phase.phase} 
+              className={`border-border/60 ${
+                phase.status === 'complete' 
+                  ? 'bg-card/75 border-green-500/30' 
+                  : phase.status === 'next'
+                  ? 'bg-card/90 border-primary/50'
+                  : 'bg-card/75'
+              }`}
+            >
               <CardHeader>
-                <Badge className="w-fit rounded-full text-xs uppercase tracking-[0.2em]">
-                  {phase.phase}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge 
+                    className={`w-fit rounded-full text-xs uppercase tracking-[0.2em] ${
+                      phase.status === 'complete'
+                        ? 'bg-green-500/20 text-green-600 dark:text-green-400'
+                        : phase.status === 'next'
+                        ? 'bg-primary/20 text-primary'
+                        : ''
+                    }`}
+                  >
+                    {phase.phase}
+                  </Badge>
+                  {phase.status === 'complete' && (
+                    <Badge variant="outline" className="text-xs">
+                      ✓ Complete
+                    </Badge>
+                  )}
+                  {phase.status === 'next' && (
+                    <Badge variant="outline" className="text-xs border-primary/50">
+                      Next
+                    </Badge>
+                  )}
+                </div>
                 <CardTitle className="font-display text-xl">
                   {phase.title}
                 </CardTitle>

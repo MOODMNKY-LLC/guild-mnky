@@ -1,0 +1,2 @@
+# This file makes the discord-bot directory compatible with pnpm workspaces
+# If the root project uses pnpm workspaces, this ensures proper resolution

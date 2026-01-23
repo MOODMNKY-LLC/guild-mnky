@@ -20,55 +20,15 @@ export async function createLfgPost(input: CreateLfgPostInput) {
     redirect('/auth/login')
   }
 
-  // Get user's profile to find their community
-  let { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('community_id')
-    .eq('id', user.id)
-    .single()
+  // Get user's community using helper function (supports multi-community)
+  const communityId = await getUserCommunity(user.id)
 
-  if (profileError || !profile) {
-    throw new Error('Profile not found. Please complete your profile setup.')
-  }
-
-  // Auto-assign to Jupiter's Girth if not assigned
-  if (!profile.community_id) {
-    const { data: defaultCommunity, error: communityError } = await supabase
-      .from('communities')
-      .select('id, name')
-      .eq('anchor_discord_guild_id', '573823015511392268')
-      .single()
-
-    if (communityError) {
-      console.error('[LFG] Error fetching default community:', communityError)
-      // If community doesn't exist, provide helpful error message
-      if (communityError.code === 'PGRST116') {
-        throw new Error(
-          'Default community not found. Please run migrations to create Jupiter\'s Girth community. ' +
-          'Run: npx supabase migration up --local'
-        )
-      }
-      throw new Error(`Failed to fetch default community: ${communityError.message}`)
-    }
-
-    if (defaultCommunity) {
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ community_id: defaultCommunity.id })
-        .eq('id', user.id)
-
-      if (updateError) {
-        console.error('[LFG] Error updating profile with community:', updateError)
-        throw new Error(`Failed to assign community: ${updateError.message}`)
-      }
-
-      profile.community_id = defaultCommunity.id
-    } else {
-      throw new Error(
-        'No default community found. Please contact an administrator or run migrations: ' +
-        'npx supabase migration up --local'
-      )
-    }
+  if (!communityId) {
+    throw new Error(
+      'Unable to determine your community. Please ensure you are a member of a Discord guild ' +
+      'or contact an administrator. If running locally, ensure migrations are up to date: ' +
+      'npx supabase migration up --local'
+    )
   }
 
   // Create the LFG post

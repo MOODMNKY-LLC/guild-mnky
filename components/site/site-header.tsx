@@ -10,7 +10,9 @@ const navLinks = [
   { label: "Community", href: "/" },
   { label: "Events", href: "/events" },
   { label: "LFG", href: "/lfg" },
+  { label: "Sherpa Hub", href: "/sherpa" },
   { label: "Guides", href: "/guides" },
+  { label: "Roadmap", href: "/roadmap" },
   { label: "Roster", href: "/roster" },
   { label: "Integrations", href: "/integrations" },
 ];

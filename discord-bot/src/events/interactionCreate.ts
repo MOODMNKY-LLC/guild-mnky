@@ -1,0 +1,215 @@
+/**
+ * Interaction Create Event Handler
+ * Routes all Discord interactions (slash commands, buttons, modals) to appropriate handlers
+ */
+
+import {
+  ChatInputCommandInteraction,
+  ButtonInteraction,
+  ModalSubmitInteraction,
+  Interaction,
+} from 'discord.js'
+import { getCommunityByGuildId } from '../utils/database.js'
+import { isKnownGuild } from '../config/constants.js'
+
+// Import command handlers
+import { handleSherpaApply } from '../commands/sherpa/apply.js'
+import { handleSherpaRequest } from '../commands/sherpa/request.js'
+import { handleSherpaSessions } from '../commands/sherpa/sessions.js'
+import { handleSherpaProfile } from '../commands/sherpa/profile.js'
+import { handleSherpaOath } from '../commands/sherpa/oath.js'
+import { handleSherpaRating } from '../commands/sherpa/rating.js'
+import { handleSherpaVoteResign } from '../commands/sherpa/vote-resign.js'
+
+// Import admin command handlers
+import { handleSherpaAdminReview } from '../commands/sherpa-admin/review.js'
+import { handleSherpaAdminList } from '../commands/sherpa-admin/list.js'
+import { handleSherpaAdminStats } from '../commands/sherpa-admin/stats.js'
+
+export async function handleInteractionCreate(interaction: Interaction) {
+  // Only handle interactions in guilds (not DMs)
+  if (!interaction.guildId || !interaction.guild) {
+    if (interaction.isRepliable()) {
+      await interaction.reply({
+        content: '❌ This bot only works in servers, not DMs.',
+        ephemeral: true,
+      })
+    }
+    return
+  }
+
+  // Check if this is a known guild
+  if (!isKnownGuild(interaction.guildId)) {
+    console.debug(`[InteractionCreate] Unknown guild ${interaction.guildId}, ignoring interaction`)
+    return
+  }
+
+  // Get community context
+  const communityId = await getCommunityByGuildId(interaction.guildId)
+  if (!communityId) {
+    console.error(`[InteractionCreate] No community found for guild ${interaction.guildId}`)
+    if (interaction.isRepliable()) {
+      await interaction.reply({
+        content: '❌ This server is not configured as a community.',
+        ephemeral: true,
+      })
+    }
+    return
+  }
+
+  try {
+    // Handle slash commands
+    if (interaction.isChatInputCommand()) {
+      await handleSlashCommand(interaction as ChatInputCommandInteraction, communityId)
+      return
+    }
+
+    // Handle button interactions
+    if (interaction.isButton()) {
+      await handleButtonInteraction(interaction as ButtonInteraction, communityId)
+      return
+    }
+
+    // Handle modal submissions
+    if (interaction.isModalSubmit()) {
+      await handleModalSubmit(interaction as ModalSubmitInteraction, communityId)
+      return
+    }
+  } catch (error) {
+    console.error(
+      {
+        error,
+        interactionType: interaction.type,
+        guildId: interaction.guildId,
+        userId: interaction.user?.id,
+      },
+      'Error handling interaction'
+    )
+    
+    if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: '❌ An error occurred while processing your request.',
+        ephemeral: true,
+      })
+    }
+  }
+}
+
+/**
+ * Handle slash commands
+ */
+async function handleSlashCommand(
+  interaction: ChatInputCommandInteraction,
+  communityId: string
+) {
+  const commandName = interaction.commandName
+  const subcommandName = interaction.options.getSubcommand(false)
+
+  // Route to appropriate command handler
+  if (commandName === 'sherpa') {
+    switch (subcommandName) {
+      case 'apply':
+        await handleSherpaApply(interaction, communityId)
+        break
+      case 'request':
+        await handleSherpaRequest(interaction, communityId)
+        break
+      case 'sessions':
+        await handleSherpaSessions(interaction, communityId)
+        break
+      case 'profile':
+        await handleSherpaProfile(interaction, communityId)
+        break
+      case 'oath':
+        await handleSherpaOath(interaction, communityId)
+        break
+      case 'rating':
+        await handleSherpaRating(interaction, communityId)
+        break
+      case 'vote-resign':
+        await handleSherpaVoteResign(interaction, communityId)
+        break
+      default:
+        await interaction.reply({
+          content: '❌ Unknown subcommand.',
+          ephemeral: true,
+        })
+    }
+  } else if (commandName === 'sherpa-admin') {
+    switch (subcommandName) {
+      case 'review':
+        await handleSherpaAdminReview(interaction, communityId)
+        break
+      case 'list':
+        await handleSherpaAdminList(interaction, communityId)
+        break
+      case 'stats':
+        await handleSherpaAdminStats(interaction, communityId)
+        break
+      default:
+        await interaction.reply({
+          content: '❌ Unknown admin subcommand.',
+          ephemeral: true,
+        })
+    }
+  } else {
+    await interaction.reply({
+      content: '❌ Unknown command.',
+      ephemeral: true,
+    })
+  }
+}
+
+/**
+ * Handle button interactions
+ */
+async function handleButtonInteraction(
+  interaction: ButtonInteraction,
+  communityId: string
+) {
+  const customId = interaction.customId
+
+  // Route button interactions based on customId prefix
+  if (customId.startsWith('sherpa_oath_accept_')) {
+    // Handle oath acceptance
+    const sherpaId = customId.replace('sherpa_oath_accept_', '')
+    await handleOathAcceptance(interaction, sherpaId, communityId)
+  } else if (customId.startsWith('sherpa_request_claim_')) {
+    // Handle request claim buttons
+    // TODO: Implement request claiming
+    await interaction.reply({
+      content: '❌ Request claiming not yet implemented.',
+      ephemeral: true,
+    })
+  } else {
+    await interaction.reply({
+      content: '❌ Unknown button interaction.',
+      ephemeral: true,
+    })
+  }
+}
+
+/**
+ * Handle modal submissions
+ */
+async function handleModalSubmit(
+  interaction: ModalSubmitInteraction,
+  communityId: string
+) {
+  const customId = interaction.customId
+
+  // Route modal submissions based on customId
+  if (customId === 'sherpa_apply_modal') {
+    // Handle application form submission
+    await handleApplicationModalSubmit(interaction, communityId)
+  } else if (customId.startsWith('sherpa_rating_modal_')) {
+    // Handle rating form submission
+    const sessionId = customId.replace('sherpa_rating_modal_', '')
+    await handleRatingModalSubmit(interaction, sessionId, communityId)
+  } else {
+    await interaction.reply({
+      content: '❌ Unknown modal submission.',
+      ephemeral: true,
+    })
+  }
+}
