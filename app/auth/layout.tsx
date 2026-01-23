@@ -2,6 +2,10 @@ import type { ReactNode } from "react";
 import { AuthInfoPanel } from "@/components/auth/auth-info-panel";
 import { DotPattern } from "@/components/ui/dot-pattern";
 
+// NOTE: This layout is automatically dynamic because auth routes use cookies()
+// The cache warning is expected and harmless - auth routes should not be cached
+// Using cookies() via proxy.ts makes routes dynamic by default, which is correct
+
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="relative min-h-svh w-full overflow-hidden">
