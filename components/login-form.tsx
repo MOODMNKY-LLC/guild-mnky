@@ -32,7 +32,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
         options: {
-          redirectTo: `${window.location.origin}/auth/oauth?next=/protected`,
+          redirectTo: `${window.location.origin}/auth/oauth?next=/account`,
         },
       })
 
@@ -56,7 +56,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
       })
 
       if (error) throw error
-      window.location.href = '/protected'
+      window.location.href = '/account'
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
       setIsLoading(false)
