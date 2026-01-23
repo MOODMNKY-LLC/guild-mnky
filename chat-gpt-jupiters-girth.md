@@ -2019,7 +2019,7 @@ The initial Supabase schema for docs + sync state
 A sequenced backlog for Phase 1 implementation
 
 You said:
-i dont know the exact root yet, we can decide on a teamspace wireframe. here is the top level page underwhich everything else will be nested for our app https://www.notion.so/mood-mnky/Home-Page-2f0cd2a6542280999decc40efed6dd3f?source=copy_link. in app the docs will be rendered as mdx. the notion integration token is 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 
+i dont know the exact root yet, we can decide on a teamspace wireframe. here is the top level page underwhich everything else will be nested for our app https://www.notion.so/mood-mnky/Home-Page-2f0cd2a6542280999decc40efed6dd3f?source=copy_link. in app the docs will be rendered as mdx. the notion integration token is [REDACTED] 
 ChatGPT said:
 
 Connected to app
