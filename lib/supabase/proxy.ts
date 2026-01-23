@@ -42,18 +42,21 @@ export async function updateSession(request: NextRequest) {
   // supabase.auth.getClaims(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
 
-  // IMPORTANT: If you remove getClaims() and you use server-side rendering
+  // IMPORTANT: If you remove getUser() and you use server-side rendering
   // with the Supabase client, your users may be randomly logged out.
-  // getClaims() validates the JWT signature and refreshes the session for PKCE flow
-  const { data } = await supabase.auth.getClaims();
-  const user = data?.claims;
+  // getUser() refreshes the session and validates the JWT for PKCE flow
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (
     request.nextUrl.pathname !== "/" &&
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/auth") &&
-    !request.nextUrl.pathname.startsWith("/_next")
+    !request.nextUrl.pathname.startsWith("/_next") &&
+    !request.nextUrl.pathname.startsWith("/account") &&
+    !request.nextUrl.pathname.startsWith("/callback")
   ) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();

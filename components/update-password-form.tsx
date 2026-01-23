@@ -40,15 +40,15 @@ export function UpdatePasswordForm({ className, ...props }: React.ComponentProps
   }
 
   return (
-    <div className={cn('flex flex-col gap-6', className)} {...props}>
+    <div className={cn('flex flex-col gap-3', className)} {...props}>
       <Card>
-        <CardHeader>
+        <CardHeader className="space-y-1.5">
           <CardTitle className="text-2xl">Reset Your Password</CardTitle>
           <CardDescription>Please enter your new password below.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <form onSubmit={handleForgotPassword}>
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-3">
               <div className="grid gap-2">
                 <Label htmlFor="password">New password</Label>
                 <Input

@@ -1,8 +1,9 @@
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@/components/site/page-shell";
 import { createClient } from "@/lib/server";
+import { EventCreateForm } from "@/components/event-create-form";
+import { EventRSVPButton } from "@/components/event-rsvp-button";
 import { EventsRealtimePanel } from "./events-client";
 import { EventsList } from "./events-list";
 import { Suspense } from "react";
@@ -67,26 +68,71 @@ function formatEventTime(startAt: string | null) {
 
 async function getEvents() {
   const supabase = await createClient();
-  const { data } = await supabase
+  
+  // Get current user if authenticated
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  const { data: events } = await supabase
     .from("events")
-    .select("title,start_at,roles,slots_total,slots_filled")
-    .order("start_at", { ascending: true })
+    .select(`
+      id,
+      title,
+      description,
+      starts_at,
+      ends_at,
+      capacity,
+      roles,
+      slots_total,
+      slots_filled,
+      created_by
+    `)
+    .order("starts_at", { ascending: true })
     .limit(6);
 
-  return data ?? [];
+  if (!events || !user) {
+    return { events: events ?? [], userRSVPs: [] };
+  }
+
+  // Get user's RSVPs for these events
+  const eventIds = events.map(e => e.id);
+  const { data: rsvps } = await supabase
+    .from("event_rsvps")
+    .select("event_id, status")
+    .eq("profile_id", user.id)
+    .in("event_id", eventIds);
+
+  return { 
+    events, 
+    userRSVPs: rsvps ?? [],
+    currentUserId: user.id 
+  };
 }
 
 async function EventsContent() {
-  const events = await getEvents();
+  const { events, userRSVPs, currentUserId } = await getEvents();
+  const rsvpMap = new Map(userRSVPs.map(r => [r.event_id, r.status]));
+  
   const displayEvents =
     events.length > 0
       ? events.map((event) => ({
+          id: event.id,
           title: event.title,
-          time: formatEventTime(event.start_at),
+          description: event.description,
+          time: formatEventTime(event.starts_at),
           roles: event.roles ?? [],
           slots: formatSlots(event.slots_filled, event.slots_total),
+          capacity: event.capacity,
+          isCreator: event.created_by === currentUserId,
+          rsvpStatus: rsvpMap.get(event.id) || null,
         }))
-      : fallbackEvents;
+      : fallbackEvents.map((event, idx) => ({
+          id: `fallback-${idx}`,
+          ...event,
+          description: undefined,
+          capacity: null,
+          isCreator: false,
+          rsvpStatus: null,
+        }));
 
   return (
     <>
@@ -101,7 +147,7 @@ async function EventsContent() {
             a shared expectation of success.
           </p>
         </div>
-        <Button size="lg">Create an event</Button>
+        <EventCreateForm />
       </section>
 
       <section className="mt-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
@@ -121,18 +167,32 @@ async function EventsContent() {
                   {event.title}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
-                <div className="flex flex-wrap gap-2">
-                  {event.roles.map((role: string) => (
-                    <span
-                      key={role}
-                      className="rounded-full border border-border/70 px-3 py-1"
-                    >
-                      {role}
-                    </span>
-                  ))}
+              <CardContent className="space-y-4">
+                {event.description && (
+                  <p className="text-sm text-muted-foreground">{event.description}</p>
+                )}
+                <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
+                  <div className="flex flex-wrap gap-2">
+                    {event.roles?.map((role: string) => (
+                      <span
+                        key={role}
+                        className="rounded-full border border-border/70 px-3 py-1"
+                      >
+                        {role}
+                      </span>
+                    ))}
+                  </div>
+                  <span>{event.slots}</span>
                 </div>
-                <span>{event.slots}</span>
+                {typeof event.id === 'string' && !event.id.startsWith('fallback') && (
+                  <div className="flex justify-end">
+                    <EventRSVPButton
+                      eventId={event.id}
+                      currentStatus={event.rsvpStatus}
+                      isRSVPed={!!event.rsvpStatus}
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

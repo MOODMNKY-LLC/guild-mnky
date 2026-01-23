@@ -15,13 +15,12 @@ import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import { useState } from 'react'
 import { MessageCircle } from 'lucide-react'
+import { login, signup } from '@/app/login/actions'
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
   const [showEmailForm, setShowEmailForm] = useState(false)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleDiscordLogin = async () => {
     const supabase = createClient()
@@ -32,7 +31,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
         options: {
-          redirectTo: `${window.location.origin}/auth/oauth?next=/account`,
+          redirectTo: `${window.location.origin}/account`,
         },
       })
 
@@ -43,36 +42,17 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
     }
   }
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const supabase = createClient()
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) throw error
-      window.location.href = '/account'
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'An error occurred')
-      setIsLoading(false)
-    }
-  }
 
   return (
-    <div className={cn('flex w-full flex-col gap-6', className)} {...props}>
+    <div className={cn('flex w-full flex-col gap-3', className)} {...props}>
       <Card className="border-border/60 bg-card/80 backdrop-blur-sm">
-        <CardHeader className="space-y-3">
+        <CardHeader className="space-y-1.5">
           <CardTitle className="font-display text-2xl">Welcome back, Guardian</CardTitle>
           <CardDescription className="text-muted-foreground">
             Sign in to access Jupiter&apos;s Girth HQ
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-3">
           {/* Discord Login - Primary */}
           <div className="space-y-4">
             <Button
@@ -107,17 +87,15 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
                 Sign in with Email
               </Button>
             ) : (
-              <form onSubmit={handleEmailLogin} className="space-y-4">
+              <form action={login} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
+                    name="email"
                     type="email"
                     placeholder="guardian@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
                     required
-                    disabled={isLoading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -132,31 +110,22 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
                   </div>
                   <Input
                     id="password"
+                    name="password"
                     type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
                     required
-                    disabled={isLoading}
                   />
                 </div>
-                {error && (
-                  <p className="text-sm text-destructive">{error}</p>
-                )}
                 <div className="flex gap-2">
                   <Button
                     type="submit"
-                    disabled={isLoading}
                     className="flex-1"
                   >
-                    {isLoading ? 'Signing in...' : 'Sign in'}
+                    Sign in
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => {
-                      setShowEmailForm(false)
-                      setError(null)
-                    }}
+                    onClick={() => setShowEmailForm(false)}
                   >
                     Cancel
                   </Button>

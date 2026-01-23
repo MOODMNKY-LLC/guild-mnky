@@ -4,6 +4,7 @@ import { AuthButton } from "@/components/auth-button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Button } from "@/components/ui/button";
 import { MobileNav } from "@/components/site/mobile-nav";
+import { PWAInstallButton } from "@/components/pwa-install-prompt";
 
 const navLinks = [
   { label: "Community", href: "/" },
@@ -46,8 +47,9 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <MobileNav links={navLinks} />
+          <PWAInstallButton />
           <Button asChild size="sm" className="hidden sm:inline-flex">
             <Link href="/protected">Enter HQ</Link>
           </Button>

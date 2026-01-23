@@ -330,7 +330,7 @@ client_id = "env(DISCORD_CLIENT_ID)"
 # DO NOT commit your Discord OAuth secret to git. Use environment variable substitution instead:
 secret = "env(DISCORD_CLIENT_SECRET)"
 # Overrides the default auth redirectUrl (optional, defaults to Supabase callback URL)
-redirect_uri = ""
+redirect_uri = "http://127.0.0.1:54321/auth/v1/callback"
 # If enabled, it will allow the user to successfully authenticate when Discord does not return an email address.
 email_optional = false
 

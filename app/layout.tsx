@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans, Space_Grotesk } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { Toaster } from "sonner";
+import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -32,6 +34,11 @@ export const metadata: Metadata = {
 
 export const viewport = {
   themeColor: "#5b2bd6",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: "cover", // For iOS safe area insets
 };
 
 const spaceGrotesk = Space_Grotesk({
@@ -64,6 +71,8 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <PWAInstallPrompt />
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

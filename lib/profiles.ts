@@ -1,11 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 
+export type UserRole = 'member' | 'officer' | 'admin'
+
 export interface Profile {
   id: string
   full_name: string | null
   username: string | null
   website: string | null
   avatar_url: string | null
+  role: UserRole
   created_at: string
   updated_at: string
 }

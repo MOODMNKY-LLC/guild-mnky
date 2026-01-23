@@ -41,21 +41,66 @@ export function ProfileForm() {
 
       const {
         data: { user },
+        error: authError,
       } = await supabase.auth.getUser()
+
+      if (authError) {
+        console.error('Auth error:', authError)
+        setError('Authentication error: ' + (authError.message || 'Failed to get user'))
+        return
+      }
 
       if (!user) {
         setError('You must be logged in to view your profile')
         return
       }
 
-      const { data, error: fetchError, status } = await supabase
+      console.log('Fetching profile for user:', user.id)
+
+      const { data, error: fetchError } = await supabase
         .from('profiles')
         .select('id, full_name, username, website, avatar_url')
         .eq('id', user.id)
         .single()
 
-      if (fetchError && status !== 406) {
-        throw fetchError
+      console.log('Profile query response:', { 
+        hasData: !!data, 
+        dataKeys: data ? Object.keys(data) : null,
+        hasError: !!fetchError,
+        errorType: fetchError ? fetchError.constructor.name : null,
+      })
+
+      if (fetchError) {
+        // Properly serialize the error for logging
+        const errorDetails = {
+          message: fetchError.message || 'No message',
+          details: fetchError.details || 'No details',
+          hint: fetchError.hint || 'No hint',
+          code: fetchError.code || 'No code',
+          // Try to get all enumerable properties
+          ...Object.fromEntries(
+            Object.entries(fetchError).map(([key, value]) => [
+              key,
+              typeof value === 'object' ? JSON.stringify(value) : value,
+            ])
+          ),
+        }
+        
+        console.error('Profile fetch error details:', JSON.stringify(errorDetails, null, 2))
+        console.error('Raw fetchError object:', fetchError)
+        
+        // PGRST116 means no rows returned (profile doesn't exist yet)
+        // This is okay - we'll handle it gracefully
+        if (fetchError.code === 'PGRST116') {
+          // Profile doesn't exist yet, that's fine
+          setProfile(null)
+          setLoading(false)
+          return
+        }
+        
+        // For other errors, throw to be caught by the catch block
+        const errorMsg = fetchError.message || fetchError.details || JSON.stringify(errorDetails) || 'Failed to load profile'
+        throw new Error(errorMsg)
       }
 
       if (data) {
@@ -65,8 +110,38 @@ export function ProfileForm() {
         setWebsite(data.website || '')
       }
     } catch (err: any) {
-      setError(err.message || 'Error loading profile')
-      console.error('Error loading profile:', err)
+      // Extract error message from various possible structures
+      let errorMessage = 'Error loading profile'
+      
+      if (err) {
+        if (typeof err === 'string') {
+          errorMessage = err
+        } else if (err.message) {
+          errorMessage = err.message
+        } else if (err.error?.message) {
+          errorMessage = err.error.message
+        } else if (err.details) {
+          errorMessage = err.details
+        } else {
+          // Try to stringify the error to see what we have
+          try {
+            const errorStr = JSON.stringify(err, Object.getOwnPropertyNames(err))
+            errorMessage = errorStr !== '{}' ? errorStr : 'Unknown error occurred'
+          } catch {
+            errorMessage = String(err) || 'Unknown error occurred'
+          }
+        }
+      }
+      
+      setError(errorMessage)
+      
+      // Log comprehensive error information
+      console.error('Error loading profile - Full error object:', err)
+      console.error('Error loading profile - Stringified:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2))
+      console.error('Error loading profile - Message:', errorMessage)
+      if (err?.stack) {
+        console.error('Error loading profile - Stack:', err.stack)
+      }
     } finally {
       setLoading(false)
     }

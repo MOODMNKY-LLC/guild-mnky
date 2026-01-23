@@ -1,49 +1,22 @@
-'use client'
-
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
-
-function ErrorContent() {
-  const searchParams = useSearchParams()
-  const error = searchParams?.get('error')
-
+export default function AuthErrorPage() {
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Sorry, something went wrong.</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {error ? (
-                <p className="text-sm text-muted-foreground">Code error: {error}</p>
-              ) : (
-                <p className="text-sm text-muted-foreground">An unspecified error occurred.</p>
-              )}
-            </CardContent>
-          </Card>
+    <div className="flex min-h-screen flex-col items-center justify-center p-4 md:p-6">
+      <div className="w-full max-w-md space-y-4 rounded-lg border border-destructive/20 bg-destructive/5 p-6 text-center">
+        <div className="space-y-1.5">
+          <h1 className="text-2xl font-bold text-destructive">Authentication Error</h1>
+          <p className="text-muted-foreground">
+            There was a problem with your authentication. Please try again.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <a
+            href="/auth/login"
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Back to Login
+          </a>
         </div>
       </div>
     </div>
-  )
-}
-
-export default function Page() {
-  return (
-    <Suspense fallback={
-      <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-        <div className="w-full max-w-sm">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Loading...</CardTitle>
-            </CardHeader>
-          </Card>
-        </div>
-      </div>
-    }>
-      <ErrorContent />
-    </Suspense>
   )
 }

@@ -1,8 +1,9 @@
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@/components/site/page-shell";
 import { createClient } from "@/lib/server";
+import { LfgCreateForm } from "@/components/lfg-create-form";
+import { LfgJoinButton } from "@/components/lfg-join-button";
 import { LfgRealtimePanel } from "./lfg-client";
 import { LfgList } from "./lfg-list";
 import { Suspense } from "react";
@@ -43,26 +44,81 @@ function formatLfgSlots(slotsFilled: number | null, slotsTotal: number | null) {
 
 async function getLfgPosts() {
   const supabase = await createClient();
-  const { data } = await supabase
+  
+  // Get current user if authenticated
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  const { data: posts } = await supabase
     .from("lfg_posts")
-    .select("title,window_text,intent,slots_total,slots_filled,status")
+    .select(`
+      id,
+      title,
+      description,
+      starts_at,
+      slots_total,
+      slots_filled,
+      status,
+      created_by
+    `)
     .order("created_at", { ascending: false })
     .limit(6);
 
-  return data ?? [];
+  if (!posts || !user) {
+    return { posts: posts ?? [], userMemberships: new Set<string>() };
+  }
+
+  // Get user's memberships for these posts
+  const postIds = posts.map(p => p.id);
+  const { data: memberships } = await supabase
+    .from("lfg_members")
+    .select("lfg_post_id")
+    .eq("profile_id", user.id)
+    .in("lfg_post_id", postIds);
+
+  const membershipSet = new Set(memberships?.map(m => m.lfg_post_id) || []);
+
+  return { 
+    posts, 
+    userMemberships: membershipSet,
+    currentUserId: user.id 
+  };
 }
 
 async function LfgContent() {
-  const posts = await getLfgPosts();
+  const { posts, userMemberships, currentUserId } = await getLfgPosts();
+  
   const displayPosts =
     posts.length > 0
       ? posts.map((post) => ({
+          id: post.id,
           title: post.title,
-          window: post.window_text ?? "Time window TBD",
-          intent: post.intent ?? "Intent to be updated",
+          description: post.description,
+          window: post.starts_at 
+            ? new Date(post.starts_at).toLocaleString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              })
+            : "Time window TBD",
           slots: formatLfgSlots(post.slots_filled, post.slots_total),
+          slotsTotal: post.slots_total,
+          slotsFilled: post.slots_filled ?? 0,
+          status: post.status,
+          isCreator: post.created_by === currentUserId,
+          isJoined: userMemberships.has(post.id),
         }))
-      : fallbackLfgPosts;
+      : fallbackLfgPosts.map((post, idx) => ({
+          id: `fallback-${idx}`,
+          ...post,
+          description: post.intent || undefined,
+          slotsTotal: 6,
+          slotsFilled: parseInt(post.slots.split(' / ')[0]) || 0,
+          status: 'open',
+          isCreator: false,
+          isJoined: false,
+        }));
 
   return (
     <>
@@ -79,7 +135,7 @@ async function LfgContent() {
             all live in one card.
           </p>
         </div>
-        <Button size="lg">Post an LFG</Button>
+        <LfgCreateForm />
       </section>
 
       <section className="mt-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
@@ -99,9 +155,25 @@ async function LfgContent() {
                   {post.title}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
-                <span>{post.intent}</span>
-                <span>{post.slots}</span>
+              <CardContent className="space-y-4">
+                {post.description && (
+                  <p className="text-sm text-muted-foreground">{post.description}</p>
+                )}
+                <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
+                  <span>{post.slots}</span>
+                </div>
+                {typeof post.id === 'string' && !post.id.startsWith('fallback') && (
+                  <div className="flex justify-end">
+                    <LfgJoinButton
+                      lfgPostId={post.id}
+                      slotsTotal={post.slotsTotal}
+                      slotsFilled={post.slotsFilled}
+                      status={post.status}
+                      isCreator={post.isCreator}
+                      isJoined={post.isJoined}
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

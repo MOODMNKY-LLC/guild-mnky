@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { isAdmin } from '@/lib/auth-helpers'
 import { AdminPanelClient } from './admin-panel-client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Shield, AlertCircle } from 'lucide-react'
@@ -30,21 +31,10 @@ async function AdminContent() {
     redirect('/auth/login')
   }
 
-  // Check if user is an officer/admin
-  // For now, we'll check user metadata or a profiles table
-  // In production, you'd check Discord roles or a profiles.is_officer field
-  const { data: profile } = await supabase
-    .from('roster_members')
-    .select('is_officer, display_name')
-    .eq('id', user.id)
-    .single()
+  // Check if user is an admin using the role system
+  const userIsAdmin = await isAdmin()
 
-  // Also check user metadata for admin flag (set during Discord OAuth)
-  const isAdmin = user.user_metadata?.is_officer === true || 
-                  user.user_metadata?.is_admin === true ||
-                  profile?.is_officer === true
-
-  if (!isAdmin) {
+  if (!userIsAdmin) {
     return (
       <div className="space-y-6">
         <Alert variant="destructive">
