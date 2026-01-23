@@ -44,10 +44,29 @@ export async function GET(request: Request) {
       }
     )
 
-    // Log cookies for debugging
+    // Log cookies for debugging - CRITICAL for PKCE troubleshooting
     if (process.env.NODE_ENV === 'development') {
       const allCookies = cookieStore.getAll()
-      console.log('[Auth Callback] Cookies available:', allCookies.map(c => c.name))
+      console.log('[Auth Callback] Cookies received by server:', allCookies.map(c => ({
+        name: c.name,
+        valueLength: c.value.length,
+        value: c.value.substring(0, 20) + '...' // First 20 chars for debugging
+      })))
+
+      // Check for PKCE-related cookies specifically
+      const pkceCookies = allCookies.filter(c =>
+        c.name.includes('verifier') ||
+        c.name.includes('code') ||
+        c.name.includes('sb-')
+      )
+      console.log('[Auth Callback] PKCE-related cookies:', pkceCookies.map(c => c.name))
+
+      // Check URL parameters
+      console.log('[Auth Callback] URL params:', {
+        code: code ? code.substring(0, 10) + '...' : 'none',
+        next: url.searchParams.get('next'),
+        fullUrl: url.toString(),
+      })
     }
 
     // Log before exchange

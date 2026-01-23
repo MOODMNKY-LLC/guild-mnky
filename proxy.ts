@@ -4,11 +4,17 @@ import { updateSession } from "@/lib/supabase/proxy"
 export async function proxy(request: NextRequest) {
   // Debug logging for all requests
   if (process.env.NODE_ENV === 'development') {
+    const cookies = request.cookies.getAll()
     console.log('[Proxy] Request:', {
       pathname: request.nextUrl.pathname,
       hasCode: request.nextUrl.searchParams.has('code'),
-      cookieCount: request.cookies.getAll().length,
-      cookieNames: request.cookies.getAll().map(c => c.name),
+      cookieCount: cookies.length,
+      cookieNames: cookies.map(c => c.name),
+      method: request.method,
+      headers: {
+        cookie: request.headers.get('cookie') ? 'present' : 'none',
+        referer: request.headers.get('referer'),
+      }
     })
   }
 
