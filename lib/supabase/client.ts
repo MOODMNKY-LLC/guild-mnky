@@ -41,44 +41,26 @@ export function createClient() {
         setAll(cookiesToSet) {
           if (typeof document !== 'undefined') {
             cookiesToSet.forEach(({ name, value, options }) => {
-              // Build cookie string with proper attributes for cross-origin access
+              // CRITICAL: Set cookie SYNCHRONOUSLY before any redirect
+              // Build cookie string with minimal attributes for localhost
               let cookieString = `${encodeURIComponent(name)}=${encodeURIComponent(value)}`
 
               // Set path
-              if (options?.path) {
-                cookieString += `; path=${options.path}`
-              } else {
-                cookieString += '; path=/'
-              }
+              cookieString += '; path=/'
 
-              // Set SameSite - must be Lax for localhost HTTP, None for HTTPS
-              const isProduction = window.location.protocol === 'https:'
-              if (isProduction) {
-                cookieString += '; SameSite=None; Secure'
-              } else {
-                cookieString += '; SameSite=Lax'
-              }
+              // For localhost development, use SameSite=Lax (None requires HTTPS)
+              cookieString += '; SameSite=Lax'
 
-              // Set maxAge if provided
-              if (options?.maxAge !== undefined) {
-                cookieString += `; max-age=${options.maxAge}`
-              }
-
-              // Set domain if provided and not localhost
-              if (options?.domain && !window.location.hostname.includes('localhost')) {
-                cookieString += `; domain=${options.domain}`
-              }
-
-              // Set cookie synchronously
+              // Set cookie IMMEDIATELY
               document.cookie = cookieString
 
               // Debug logging for PKCE cookies
               if (process.env.NODE_ENV === 'development' && name.includes('verifier')) {
-                console.log('[Browser Client] PKCE cookie set:', {
+                console.log('[Browser Client] PKCE cookie set synchronously:', {
                   name,
                   valueLength: value.length,
-                  isProduction,
-                  cookieString: cookieString.substring(0, 100) + '...'
+                  cookieString: cookieString.substring(0, 100) + '...',
+                  allCookies: document.cookie.split(';').map(c => c.trim().split('=')[0])
                 })
               }
             })
