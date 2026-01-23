@@ -15,6 +15,10 @@ export async function GET(request: Request) {
     // This is the correct way for Next.js App Router Route Handlers
     const cookieStore = await cookies()
 
+    // Determine if we're in development (localhost) or production
+    const isDevelopment = process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('localhost') || 
+                         process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('127.0.0.1');
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY!,
@@ -28,6 +32,12 @@ export async function GET(request: Request) {
               cookieStore.set(name, value, options)
             })
           },
+        },
+        cookieOptions: {
+          domain: isDevelopment ? 'localhost' : undefined, // Explicitly set domain for localhost in dev
+          secure: !isDevelopment, // false for HTTP localhost, true for HTTPS production
+          sameSite: 'lax', // Lax for localhost, will be overridden to None for cross-site OAuth in production
+          path: '/',
         },
       }
     )

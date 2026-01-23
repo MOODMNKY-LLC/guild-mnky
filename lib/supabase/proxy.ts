@@ -17,6 +17,11 @@ export async function updateSession(request: NextRequest, redirectResponse?: Nex
 
   // With Fluid compute, don't put this client in a global environment
   // variable. Always create a new one on each request.
+  
+  // Determine if we're in development (localhost) or production
+  const isDevelopment = process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('localhost') || 
+                       process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('127.0.0.1');
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY!,
@@ -39,6 +44,12 @@ export async function updateSession(request: NextRequest, redirectResponse?: Nex
             supabaseResponse.cookies.set(name, value, options),
           );
         },
+      },
+      cookieOptions: {
+        domain: isDevelopment ? 'localhost' : undefined, // Explicitly set domain for localhost in dev
+        secure: !isDevelopment, // false for HTTP localhost, true for HTTPS production
+        sameSite: 'lax', // Lax for localhost, will be overridden to None for cross-site OAuth in production
+        path: '/',
       },
     },
   );
