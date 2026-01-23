@@ -56,7 +56,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
       // CRITICAL: Verify we're using the correct client
       console.log('[Login Form] Supabase client created:', {
         url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-        hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+        hasOldKey: !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+        hasNewKey: !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY,
         origin: window.location.origin,
         protocol: window.location.protocol,
       })
