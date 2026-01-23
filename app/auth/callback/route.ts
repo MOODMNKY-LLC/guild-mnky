@@ -29,9 +29,17 @@ export async function GET(request: Request) {
             })
           },
         },
+        cookieOptions: {
+          name: `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL!.split('//')[1]?.split('.')[0] || 'unknown'}-auth-token`,
+          path: '/',
+          sameSite: 'lax',
+          secure: false,
+          maxAge: 400 * 24 * 60 * 60,
+        },
         auth: {
           // Enable automatic session detection from URL for PKCE flow
           detectSessionInUrl: true,
+          flowType: 'pkce',
         },
       }
     )

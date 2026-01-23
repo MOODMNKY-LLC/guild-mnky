@@ -74,6 +74,16 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
           hasUrl: !!data?.url,
           provider: 'discord',
         })
+
+        // Check cookies immediately after OAuth initiation
+        setTimeout(() => {
+          const cookies = document.cookie.split(';').map(c => c.trim())
+          const supabaseCookies = cookies.filter(c => c.includes('sb-') || c.includes('verifier'))
+          console.log('[Login Form] Cookies after OAuth initiation:', {
+            totalCookies: cookies.length,
+            supabaseCookies,
+          })
+        }, 100)
       }
 
       // Note: User will be redirected to Discord, then back to callback route
