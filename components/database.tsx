@@ -302,10 +302,10 @@ export function DatabaseManager({ projectRef }: { projectRef: string }) {
 
       {tables && tables.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-          {tables.map((table: any) => (
+          {tables.map((table: any, index: number) => (
             <Button
               variant="outline"
-              key={table.id}
+              key={table.id || `${table.schema || 'public'}.${table.name || index}`}
               size="lg"
               className="flex-row justify-between text-left"
               onClick={() => handleTableClick(table)}
