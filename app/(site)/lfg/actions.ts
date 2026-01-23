@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/server'
 import { redirect } from 'next/navigation'
+import { getUserCommunity } from '@/lib/community-helpers'
 
 export type CreateLfgPostInput = {
   title: string
@@ -32,11 +33,23 @@ export async function createLfgPost(input: CreateLfgPostInput) {
 
   // Auto-assign to Jupiter's Girth if not assigned
   if (!profile.community_id) {
-    const { data: defaultCommunity } = await supabase
+    const { data: defaultCommunity, error: communityError } = await supabase
       .from('communities')
-      .select('id')
+      .select('id, name')
       .eq('anchor_discord_guild_id', '573823015511392268')
       .single()
+
+    if (communityError) {
+      console.error('[LFG] Error fetching default community:', communityError)
+      // If community doesn't exist, provide helpful error message
+      if (communityError.code === 'PGRST116') {
+        throw new Error(
+          'Default community not found. Please run migrations to create Jupiter\'s Girth community. ' +
+          'Run: npx supabase migration up --local'
+        )
+      }
+      throw new Error(`Failed to fetch default community: ${communityError.message}`)
+    }
 
     if (defaultCommunity) {
       const { error: updateError } = await supabase
@@ -45,12 +58,16 @@ export async function createLfgPost(input: CreateLfgPostInput) {
         .eq('id', user.id)
 
       if (updateError) {
+        console.error('[LFG] Error updating profile with community:', updateError)
         throw new Error(`Failed to assign community: ${updateError.message}`)
       }
 
       profile.community_id = defaultCommunity.id
     } else {
-      throw new Error('No default community found. Please contact an administrator.')
+      throw new Error(
+        'No default community found. Please contact an administrator or run migrations: ' +
+        'npx supabase migration up --local'
+      )
     }
   }
 
@@ -58,7 +75,7 @@ export async function createLfgPost(input: CreateLfgPostInput) {
   const { data: post, error } = await supabase
     .from('lfg_posts')
     .insert({
-      community_id: profile.community_id,
+      community_id: communityId,
       title: input.title,
       description: input.description || null,
       starts_at: input.starts_at || null,
@@ -220,6 +237,44 @@ export async function closeLfgPost(lfg_post_id: string) {
 
   if (error) {
     throw new Error(`Failed to close post: ${error.message}`)
+  }
+
+  revalidatePath('/lfg')
+  return { success: true }
+}
+
+export async function deleteLfgPost(lfg_post_id: string) {
+  const supabase = await createClient()
+  
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    redirect('/auth/login')
+  }
+
+  // Verify user is the creator
+  const { data: post, error: postError } = await supabase
+    .from('lfg_posts')
+    .select('created_by')
+    .eq('id', lfg_post_id)
+    .single()
+
+  if (postError || !post) {
+    throw new Error('LFG post not found')
+  }
+
+  if (post.created_by !== user.id) {
+    throw new Error('Only the creator can delete this LFG post')
+  }
+
+  // Delete the post
+  // Note: lfg_members will be automatically deleted due to CASCADE constraint
+  const { error } = await supabase
+    .from('lfg_posts')
+    .delete()
+    .eq('id', lfg_post_id)
+
+  if (error) {
+    throw new Error(`Failed to delete post: ${error.message}`)
   }
 
   revalidatePath('/lfg')

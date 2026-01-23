@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/server'
 import { redirect } from 'next/navigation'
+import { getUserCommunity } from '@/lib/community-helpers'
 
 export type CreateEventInput = {
   title: string
@@ -22,46 +23,22 @@ export async function createEvent(input: CreateEventInput) {
     redirect('/auth/login')
   }
 
-  // Get user's profile to find their community
-  let { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('community_id')
-    .eq('id', user.id)
-    .single()
+  // Get user's community using helper function (supports multi-community)
+  const communityId = await getUserCommunity(user.id)
 
-  if (profileError || !profile) {
-    throw new Error('Profile not found. Please complete your profile setup.')
-  }
-
-  // Auto-assign to Jupiter's Girth if not assigned
-  if (!profile.community_id) {
-    const { data: defaultCommunity } = await supabase
-      .from('communities')
-      .select('id')
-      .eq('anchor_discord_guild_id', '573823015511392268')
-      .single()
-
-    if (defaultCommunity) {
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ community_id: defaultCommunity.id })
-        .eq('id', user.id)
-
-      if (updateError) {
-        throw new Error(`Failed to assign community: ${updateError.message}`)
-      }
-
-      profile.community_id = defaultCommunity.id
-    } else {
-      throw new Error('No default community found. Please contact an administrator.')
-    }
+  if (!communityId) {
+    throw new Error(
+      'Unable to determine your community. Please ensure you are a member of a Discord guild ' +
+      'or contact an administrator. If running locally, ensure migrations are up to date: ' +
+      'npx supabase migration up --local'
+    )
   }
 
   // Create the event
   const { data: event, error } = await supabase
     .from('events')
     .insert({
-      community_id: profile.community_id,
+      community_id: communityId,
       title: input.title,
       description: input.description || null,
       starts_at: input.starts_at,

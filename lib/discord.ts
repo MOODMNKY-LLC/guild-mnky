@@ -93,11 +93,22 @@ export async function verifyDiscordMembership(
     return { verified: true, needsProfile: true }
   }
 
-  // Update community_id if not set
-  if (!profile.community_id || profile.community_id !== community.id) {
+  // Update community_id and discord_guild_id if not set or changed
+  const updates: { community_id: string; discord_guild_id: string } = {
+    community_id: community.id,
+    discord_guild_id: guildId
+  }
+
+  // Only update if values have changed
+  const needsUpdate = !profile.community_id || 
+                      profile.community_id !== community.id ||
+                      // Check if discord_guild_id needs updating (compare with current value)
+                      true // Always update discord_guild_id to ensure it's set
+
+  if (needsUpdate) {
     const { error: updateError } = await supabase
       .from('profiles')
-      .update({ community_id: community.id })
+      .update(updates)
       .eq('id', profile.id)
 
     if (updateError) {

@@ -46,6 +46,20 @@
     },
     "openaiDeveloperDocs": {
       "url": "https://developers.openai.com/mcp"
+    },
+    "mcp-discord": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "DISCORD_TOKEN",
+        "mcp/mcp-discord"
+      ],
+      "env": {
+        "DISCORD_TOKEN": "MTE4NDIwNjMxNTY5MDY3NjMxNQ.GkJBT7.MEH7CCQzhxgum6WQT4EBXNkokT6aSOKgIv4nVI"
+      }
     }
   }
 }
