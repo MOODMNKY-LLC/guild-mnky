@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   description:
     "A community OS built around respect, coordination, and the games we play together.",
   applicationName: "Jupiter's Girth HQ",
-  manifest: "/site.webmanifest",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     title: "Jupiter's Girth HQ",
     statusBarStyle: "black-translucent",
