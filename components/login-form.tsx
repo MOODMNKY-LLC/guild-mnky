@@ -53,19 +53,52 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
         console.log('[Login Form] Cookies before OAuth:', document.cookie.split(';').map(c => c.trim().split('=')[0]))
       }
 
-      // CRITICAL: Verify we're using the correct client
+      // CRITICAL: Verify we're using the correct client and origin
+      const currentOrigin = window.location.origin
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+      const isSupabaseLocalhost = supabaseUrl.includes('127.0.0.1') || supabaseUrl.includes('localhost')
+      const isAppLocalhost = currentOrigin.includes('localhost') && !currentOrigin.includes('127.0.0.1')
+      const isApp127 = currentOrigin.includes('127.0.0.1')
+      
       console.log('[Login Form] Supabase client created:', {
-        url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+        url: supabaseUrl,
         hasOldKey: !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
         hasNewKey: !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY,
-        origin: window.location.origin,
+        origin: currentOrigin,
         protocol: window.location.protocol,
+        hostname: window.location.hostname,
+      })
+      
+      // CRITICAL CHECK: Origin mismatch detection
+      if (isSupabaseLocalhost && supabaseUrl.includes('127.0.0.1') && isAppLocalhost) {
+        const errorMsg = 'Origin mismatch detected!\n\n' +
+          'You are accessing the app via localhost:3000, but Supabase is on 127.0.0.1:54321.\n' +
+          'This causes cookie domain mismatch and authentication failures.\n\n' +
+          'SOLUTION: Please access the app at http://127.0.0.1:3000 instead of http://localhost:3000'
+        console.error('[Login Form] ❌ CRITICAL: Origin Mismatch Detected!')
+        console.error('[Login Form]', errorMsg)
+        setError(errorMsg)
+        setIsLoading(false)
+        oauthInitiatedRef.current = false
+        return // Prevent OAuth from starting
+      }
+
+      // Use the exact origin from window.location to ensure cookie domain matches
+      const redirectUrl = `${currentOrigin}/auth/callback?next=/account`
+      
+      console.log('[Login Form] OAuth redirect URL:', redirectUrl)
+      console.log('[Login Form] Origin check:', {
+        currentOrigin,
+        isAppLocalhost,
+        isApp127,
+        supabaseUrl,
+        match: isSupabaseLocalhost && ((isApp127 && supabaseUrl.includes('127.0.0.1')) || (isAppLocalhost && supabaseUrl.includes('localhost')))
       })
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=/account`,
+          redirectTo: redirectUrl,
         },
       })
 

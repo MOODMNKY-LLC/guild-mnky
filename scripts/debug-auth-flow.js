@@ -32,9 +32,12 @@
     console.log('\n📋 Initial State Check');
     console.log('------------------------');
     const cookies = parseCookies();
-    const supabaseUrl = window.location.origin.includes('127.0.0.1') 
-      ? 'http://127.0.0.1:54321' 
-      : process.env.NEXT_PUBLIC_SUPABASE_URL;
+    // Determine Supabase URL based on current origin (browser doesn't have process.env)
+    const supabaseUrl = window.location.hostname === '127.0.0.1'
+      ? 'http://127.0.0.1:54321'
+      : window.location.hostname.includes('localhost')
+      ? 'http://localhost:54321'
+      : 'https://your-project.supabase.co'; // Fallback for production
     
     console.log('Current URL:', window.location.href);
     console.log('Origin:', window.location.origin);
