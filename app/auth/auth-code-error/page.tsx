@@ -1,11 +1,12 @@
-'use client'
-
 import { Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
 
-function ErrorContent() {
-  const searchParams = useSearchParams()
-  const error = searchParams.get('error')
+interface AuthCodeErrorPageProps {
+  searchParams: Promise<{ error?: string }>
+}
+
+async function ErrorContent({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const params = await searchParams
+  const error = params.error
   
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-4 md:p-6">
@@ -36,7 +37,7 @@ function ErrorContent() {
   )
 }
 
-export default function AuthCodeErrorPage() {
+export default function AuthCodeErrorPage({ searchParams }: AuthCodeErrorPageProps) {
   return (
     <Suspense fallback={
       <div className="flex min-h-screen flex-col items-center justify-center p-4 md:p-6">
@@ -45,7 +46,7 @@ export default function AuthCodeErrorPage() {
         </div>
       </div>
     }>
-      <ErrorContent />
+      <ErrorContent searchParams={searchParams} />
     </Suspense>
   )
 }

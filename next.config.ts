@@ -18,7 +18,13 @@ const pwaConfig = withPWA({
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === "development",
-  buildExcludes: [/app-build-manifest\.json$/],
+  // Exclude dynamic chunks from precaching to avoid 404 errors when chunks change
+  buildExcludes: [
+    /app-build-manifest\.json$/,
+    /\.map$/,
+    // Exclude dynamic chunk files that may not exist in production
+    /^static\/chunks\/\d+-.*\.js$/,
+  ],
   runtimeCaching: [
     {
       urlPattern: /^https:\/\/fonts\.(?:gstatic|googleapis)\.com\/.*/i,
