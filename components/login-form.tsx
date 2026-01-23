@@ -1,7 +1,6 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -42,119 +41,23 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
       return
     }
 
-    const supabase = createClient()
     setIsLoading(true)
     setError(null)
     oauthInitiatedRef.current = true
 
     try {
-      // Log cookies before OAuth initiation for debugging
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Login Form] Cookies before OAuth:', document.cookie.split(';').map(c => c.trim().split('=')[0]))
-      }
-
-      // CRITICAL: Verify we're using the correct client and origin
-      const currentOrigin = window.location.origin
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-      const isSupabaseLocalhost = supabaseUrl.includes('127.0.0.1') || supabaseUrl.includes('localhost')
-      const isAppLocalhost = currentOrigin.includes('localhost') && !currentOrigin.includes('127.0.0.1')
-      const isApp127 = currentOrigin.includes('127.0.0.1')
+      // Use Route Handler to initiate OAuth server-side
+      // This bypasses the browser client bug where createBrowserClient
+      // doesn't consistently set the PKCE code verifier cookie
+      // The Route Handler uses createServerClient with explicit cookie handling
+      // which ensures the code verifier cookie is set on the response
+      // 
+      // Navigate directly to the Route Handler - it will redirect to Discord OAuth
+      // The browser will handle the redirect naturally, and cookies will be included
+      window.location.href = '/api/auth/discord?next=/protected'
       
-      console.log('[Login Form] Supabase client created:', {
-        url: supabaseUrl,
-        hasOldKey: !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-        hasNewKey: !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY,
-        origin: currentOrigin,
-        protocol: window.location.protocol,
-        hostname: window.location.hostname,
-      })
-      
-      // CRITICAL CHECK: Origin mismatch detection
-      if (isSupabaseLocalhost && supabaseUrl.includes('127.0.0.1') && isAppLocalhost) {
-        const errorMsg = 'Origin mismatch detected!\n\n' +
-          'You are accessing the app via localhost:3000, but Supabase is on 127.0.0.1:54321.\n' +
-          'This causes cookie domain mismatch and authentication failures.\n\n' +
-          'SOLUTION: Please access the app at http://127.0.0.1:3000 instead of http://localhost:3000'
-        console.error('[Login Form] ❌ CRITICAL: Origin Mismatch Detected!')
-        console.error('[Login Form]', errorMsg)
-        setError(errorMsg)
-        setIsLoading(false)
-        oauthInitiatedRef.current = false
-        return // Prevent OAuth from starting
-      }
-
-      // Use the exact origin from window.location to ensure cookie domain matches
-      const redirectUrl = `${currentOrigin}/auth/callback?next=/account`
-      
-      console.log('[Login Form] OAuth redirect URL:', redirectUrl)
-      console.log('[Login Form] Origin check:', {
-        currentOrigin,
-        isAppLocalhost,
-        isApp127,
-        supabaseUrl,
-        match: isSupabaseLocalhost && ((isApp127 && supabaseUrl.includes('127.0.0.1')) || (isAppLocalhost && supabaseUrl.includes('localhost')))
-      })
-
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'discord',
-        options: {
-          redirectTo: redirectUrl,
-        },
-      })
-
-      if (error) {
-        oauthInitiatedRef.current = false
-        throw error
-      }
-
-      // Log cookies after OAuth initiation (before redirect)
-      // CRITICAL: Check immediately and with delay to catch async cookie setting
-      if (process.env.NODE_ENV === 'development') {
-        // Parse all cookies into name-value pairs
-        const parseCookies = () => {
-          const cookies: Record<string, string> = {}
-          document.cookie.split(';').forEach(cookie => {
-            const [name, ...valueParts] = cookie.trim().split('=')
-            if (name) {
-              cookies[name] = decodeURIComponent(valueParts.join('='))
-            }
-          })
-          return cookies
-        }
-        
-        const cookiesBefore = parseCookies()
-        console.log('[Login Form] Cookies immediately after signInWithOAuth:', cookiesBefore)
-        console.log('[Login Form] Cookie count:', Object.keys(cookiesBefore).length)
-        console.log('[Login Form] All cookie names:', Object.keys(cookiesBefore))
-        
-        // Check for Supabase-specific cookies (they use sb- prefix and project ref)
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-        const projectRef = supabaseUrl.split('//')[1]?.split('.')[0] || supabaseUrl.split('/').pop() || 'unknown'
-        const supabaseCookiePattern = new RegExp(`sb-.*-auth-token|sb-.*-code-verifier|${projectRef}`, 'i')
-        
-        const supabaseCookies = Object.keys(cookiesBefore).filter(name => 
-          supabaseCookiePattern.test(name) ||
-          name.includes('sb-') || 
-          name.includes('supabase') || 
-          name.includes('code-verifier') ||
-          name.includes('auth-token') ||
-          name.includes('verifier')
-        )
-        console.log('[Login Form] Supabase-related cookies found:', supabaseCookies)
-        console.log('[Login Form] Project ref from URL:', projectRef)
-        
-        // Small delay to allow cookie to be set (cookies might be set asynchronously)
-        setTimeout(() => {
-          const cookiesAfter = parseCookies()
-          console.log('[Login Form] Cookies after 100ms delay:', cookiesAfter)
-          console.log('[Login Form] Cookie count after delay:', Object.keys(cookiesAfter).length)
-          console.log('[Login Form] New cookies:', Object.keys(cookiesAfter).filter(name => !cookiesBefore[name]))
-        }, 100)
-      }
-
-      // Note: User will be redirected to Discord, then back to callback route
-      // Don't set loading to false here as the redirect will happen
-      // The ref will reset when the component remounts after redirect
+      // Note: The redirect happens immediately, so this code won't execute
+      // If there's an error, the Route Handler will redirect to /auth/login with error params
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
       setIsLoading(false)

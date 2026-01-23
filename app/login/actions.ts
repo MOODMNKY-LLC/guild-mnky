@@ -27,7 +27,7 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
-  redirect('/account')
+  redirect('/protected')
 }
 
 export async function signup(formData: FormData) {
@@ -50,7 +50,7 @@ export async function signup(formData: FormData) {
   // Only redirect if session is immediately available
   if (authData.session) {
     revalidatePath('/', 'layout')
-    redirect('/account')
+    redirect('/protected')
   } else {
     // User needs to confirm email - redirect to success page
     redirect('/auth/sign-up-success')

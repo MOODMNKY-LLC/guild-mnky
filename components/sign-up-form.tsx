@@ -1,7 +1,6 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -31,26 +30,22 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
       return
     }
 
-    const supabase = createClient()
     setIsLoading(true)
     setError(null)
     oauthInitiatedRef.current = true
 
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'discord',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=/account`,
-        },
-      })
-
-      if (error) {
-        oauthInitiatedRef.current = false
-        throw error
-      }
-      // Note: User will be redirected to Discord, then back to callback route
-      // Don't set loading to false here as the redirect will happen
-      // The ref will reset when the component remounts after redirect
+      // Use Route Handler to initiate OAuth server-side
+      // This bypasses the browser client bug where createBrowserClient
+      // doesn't consistently set the PKCE code verifier cookie
+      // Sign-up redirects to /account instead of /protected
+      // 
+      // Navigate directly to the Route Handler - it will redirect to Discord OAuth
+      // The browser will handle the redirect naturally, and cookies will be included
+      window.location.href = '/api/auth/discord?next=/account'
+      
+      // Note: The redirect happens immediately, so this code won't execute
+      // If there's an error, the Route Handler will redirect to /auth/login with error params
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
       setIsLoading(false)
