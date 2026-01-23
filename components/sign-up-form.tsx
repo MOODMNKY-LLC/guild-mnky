@@ -14,16 +14,27 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { MessageCircle } from 'lucide-react'
 import { signup } from '@/app/login/actions'
 
 export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
   const [showEmailForm, setShowEmailForm] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const oauthInitiatedRef = useRef(false)
 
   const handleDiscordSignUp = async () => {
+    // Prevent multiple simultaneous OAuth initiations
+    if (oauthInitiatedRef.current || isLoading) {
+      return
+    }
+
     const supabase = createClient()
+    setIsLoading(true)
+    setError(null)
+    oauthInitiatedRef.current = true
 
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -33,10 +44,17 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
         },
       })
 
-      if (error) throw error
+      if (error) {
+        oauthInitiatedRef.current = false
+        throw error
+      }
       // Note: User will be redirected to Discord, then back to callback route
+      // Don't set loading to false here as the redirect will happen
+      // The ref will reset when the component remounts after redirect
     } catch (error: unknown) {
-      console.error('Discord signup error:', error)
+      setError(error instanceof Error ? error.message : 'An error occurred')
+      setIsLoading(false)
+      oauthInitiatedRef.current = false
     }
   }
 
@@ -51,16 +69,24 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* Error Display */}
+          {error && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          
           {/* Discord Sign Up - Primary */}
           <div className="space-y-4">
             <Button
               type="button"
               onClick={handleDiscordSignUp}
+              disabled={isLoading}
               className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium h-11"
               size="lg"
             >
               <MessageCircle className="mr-2 h-5 w-5" />
-              Sign up with Discord
+              {isLoading ? 'Connecting...' : 'Sign up with Discord'}
             </Button>
 
             {/* Divider */}

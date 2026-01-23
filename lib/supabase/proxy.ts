@@ -2,8 +2,10 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { hasEnvVars } from "../utils";
 
-export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
+export async function updateSession(request: NextRequest, redirectResponse?: NextResponse) {
+  // If a redirect response is provided (e.g., for OAuth callback redirects),
+  // use it as the base response, otherwise create a new one
+  let supabaseResponse = redirectResponse || NextResponse.next({
     request,
   });
 
@@ -17,23 +19,37 @@ export async function updateSession(request: NextRequest) {
   // variable. Always create a new one on each request.
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY!,
     {
       cookies: {
         getAll() {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value),
-          );
-          supabaseResponse = NextResponse.next({
-            request,
-          });
+          // CRITICAL: Always create a new response if we don't have one
+          // This ensures cookies are properly set on the response
+          if (!redirectResponse) {
+            supabaseResponse = NextResponse.next({
+              request,
+            });
+          }
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           );
+
+          // Debug logging
+          if (process.env.NODE_ENV === 'development' && cookiesToSet.length > 0) {
+            console.log('[Proxy] Setting cookies:', cookiesToSet.map(c => ({
+              name: c.name,
+              valueLength: c.value.length,
+              options: c.options
+            })))
+          }
         },
+      },
+      auth: {
+        // Enable automatic session detection from URL for PKCE flow
+        detectSessionInUrl: true,
       },
     },
   );
@@ -42,27 +58,11 @@ export async function updateSession(request: NextRequest) {
   // supabase.auth.getClaims(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
 
-  // IMPORTANT: If you remove getUser() and you use server-side rendering
+  // IMPORTANT: If you remove getClaims() and you use server-side rendering
   // with the Supabase client, your users may be randomly logged out.
-  // getUser() refreshes the session and validates the JWT for PKCE flow
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (
-    request.nextUrl.pathname !== "/" &&
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth") &&
-    !request.nextUrl.pathname.startsWith("/_next") &&
-    !request.nextUrl.pathname.startsWith("/account") &&
-    !request.nextUrl.pathname.startsWith("/callback")
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
-    const url = request.nextUrl.clone();
-    url.pathname = "/auth/login";
-    return NextResponse.redirect(url);
-  }
+  // getClaims() validates the JWT signature against the project's published public keys
+  // every time, ensuring secure token validation without relying on Auth server liveness
+  await supabase.auth.getClaims();
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
   // If you're creating a new response object with NextResponse.next() make sure to:

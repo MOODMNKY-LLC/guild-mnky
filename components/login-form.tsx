@@ -48,84 +48,32 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
     oauthInitiatedRef.current = true
 
     try {
-      // Log cookies before OAuth initiation for debugging
+      // Log before OAuth for debugging
       if (process.env.NODE_ENV === 'development') {
-        console.log('[Login Form] Cookies before OAuth:', document.cookie.split(';').map(c => c.trim().split('=')[0]))
+        console.log('[Login Form] Starting Discord OAuth:', {
+          redirectTo: `${window.location.origin}/auth/callback?next=/account`,
+          origin: window.location.origin,
+        })
       }
-
-      // CRITICAL: Verify we're using the correct client
-      console.log('[Login Form] Supabase client created:', {
-        url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-        hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-        origin: window.location.origin,
-        protocol: window.location.protocol,
-      })
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
         options: {
           redirectTo: `${window.location.origin}/auth/callback?next=/account`,
-          // PKCE is the default flow for SSR - no need to specify
-          // The cookie storage fix ensures the code verifier is set synchronously
         },
       })
-
-      // Log the OAuth response for debugging
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Login Form] OAuth response:', { data, error })
-        if (data?.url) {
-          console.log('[Login Form] OAuth redirect URL:', data.url)
-        }
-      }
 
       if (error) {
         oauthInitiatedRef.current = false
         throw error
       }
 
-      // Log cookies after OAuth initiation (before redirect)
-      // CRITICAL: Check immediately and with delay to catch async cookie setting
+      // Log the OAuth response for debugging
       if (process.env.NODE_ENV === 'development') {
-        // Parse all cookies into name-value pairs
-        const parseCookies = () => {
-          const cookies: Record<string, string> = {}
-          document.cookie.split(';').forEach(cookie => {
-            const [name, ...valueParts] = cookie.trim().split('=')
-            if (name) {
-              cookies[name] = decodeURIComponent(valueParts.join('='))
-            }
-          })
-          return cookies
-        }
-        
-        const cookiesBefore = parseCookies()
-        console.log('[Login Form] Cookies immediately after signInWithOAuth:', cookiesBefore)
-        console.log('[Login Form] Cookie count:', Object.keys(cookiesBefore).length)
-        console.log('[Login Form] All cookie names:', Object.keys(cookiesBefore))
-        
-        // Check for Supabase-specific cookies (they use sb- prefix and project ref)
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-        const projectRef = supabaseUrl.split('//')[1]?.split('.')[0] || supabaseUrl.split('/').pop() || 'unknown'
-        const supabaseCookiePattern = new RegExp(`sb-.*-auth-token|sb-.*-code-verifier|${projectRef}`, 'i')
-        
-        const supabaseCookies = Object.keys(cookiesBefore).filter(name => 
-          supabaseCookiePattern.test(name) ||
-          name.includes('sb-') || 
-          name.includes('supabase') || 
-          name.includes('code-verifier') ||
-          name.includes('auth-token') ||
-          name.includes('verifier')
-        )
-        console.log('[Login Form] Supabase-related cookies found:', supabaseCookies)
-        console.log('[Login Form] Project ref from URL:', projectRef)
-        
-        // Small delay to allow cookie to be set (cookies might be set asynchronously)
-        setTimeout(() => {
-          const cookiesAfter = parseCookies()
-          console.log('[Login Form] Cookies after 100ms delay:', cookiesAfter)
-          console.log('[Login Form] Cookie count after delay:', Object.keys(cookiesAfter).length)
-          console.log('[Login Form] New cookies:', Object.keys(cookiesAfter).filter(name => !cookiesBefore[name]))
-        }, 100)
+        console.log('[Login Form] OAuth initiated successfully:', {
+          hasUrl: !!data?.url,
+          provider: 'discord',
+        })
       }
 
       // Note: User will be redirected to Discord, then back to callback route
