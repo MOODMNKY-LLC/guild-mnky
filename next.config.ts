@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
     // PWA plugin will be added by withPWA wrapper
     return config;
   },
+  // Add empty turbopack config to silence Next.js 16 warning
+  // We're using webpack for PWA support, so we need to explicitly disable Turbopack
+  turbopack: {},
 };
 
 const pwaConfig = withPWA({
