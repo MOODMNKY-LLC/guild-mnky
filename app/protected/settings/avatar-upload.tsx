@@ -55,14 +55,16 @@ export function AvatarUpload() {
         return
       }
 
-      // Update user metadata with avatar URL
-      const { error } = await supabase.auth.updateUser({
-        data: {
+      // Update profile with avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
           avatar_url: urlData.publicUrl,
-        },
-      })
+          updated_at: new Date().toISOString(),
+        })
 
-      if (error) throw error
+      if (updateError) throw updateError
 
       alert('Avatar updated successfully!')
       router.refresh()

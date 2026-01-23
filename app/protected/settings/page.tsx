@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { syncNotionGuides } from "./actions";
 import { AvatarUpload } from "./avatar-upload";
+import { ProfileForm } from "@/components/profile-form";
 
 const integrationChecklist = [
   "Discord is required for access and roles.",
@@ -37,6 +38,8 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <ProfileForm />
 
       <Card className="border-border/60 bg-background/60">
         <CardHeader>

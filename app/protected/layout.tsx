@@ -47,6 +47,9 @@ export default function ProtectedLayout({
             <Link href="/integrations" className="rounded-lg px-3 py-2 hover:bg-accent/60 hover:text-foreground">
               Integrations
             </Link>
+            <Link href="/account" className="rounded-lg px-3 py-2 hover:bg-accent/60 hover:text-foreground">
+              Account
+            </Link>
             <Link href="/protected/settings" className="rounded-lg px-3 py-2 hover:bg-accent/60 hover:text-foreground">
               Settings
             </Link>
