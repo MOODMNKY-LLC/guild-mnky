@@ -34,12 +34,9 @@ export async function createClient() {
         },
       },
       cookieOptions: {
-        // CRITICAL: Do NOT set domain for IP addresses (127.0.0.1)
-        // Browsers reject cookies with domain attributes set to IP addresses
-        // For IP addresses, omit domain and browser will auto-scope to that IP
-        domain: isDevelopment && process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('localhost') 
-          ? 'localhost' 
-          : undefined,
+        // CRITICAL: Don't set domain for IP addresses (127.0.0.1) - browsers reject it
+        // Browsers automatically scope cookies to the exact origin for IP addresses
+        domain: isDevelopment ? undefined : undefined, // No domain for IP addresses or localhost
         secure: !isDevelopment, // false for HTTP localhost, true for HTTPS production
         sameSite: 'lax', // Lax for localhost, will be overridden to None for cross-site OAuth in production
         path: '/',

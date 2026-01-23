@@ -69,8 +69,12 @@ export function createClient() {
                 cookieString += `; max-age=${options.maxAge}`
               }
               
-              // Set domain if provided (but not for localhost)
-              if (options?.domain && !window.location.hostname.includes('localhost')) {
+              // Set domain if provided (but NOT for localhost or IP addresses)
+              // Browsers don't allow domain attribute for IP addresses (127.0.0.1)
+              // and localhost cookies work without explicit domain
+              const isIPAddress = /^\d+\.\d+\.\d+\.\d+$/.test(window.location.hostname)
+              const isLocalhost = window.location.hostname.includes('localhost')
+              if (options?.domain && !isLocalhost && !isIPAddress) {
                 cookieString += `; domain=${options.domain}`
               }
               

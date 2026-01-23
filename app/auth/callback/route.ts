@@ -34,12 +34,9 @@ export async function GET(request: Request) {
           },
         },
         cookieOptions: {
-          // CRITICAL: Do NOT set domain for IP addresses (127.0.0.1)
-          // Browsers reject cookies with domain attributes set to IP addresses
-          // For IP addresses, omit domain and browser will auto-scope to that IP
-          domain: isDevelopment && process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('localhost') 
-            ? 'localhost' 
-            : undefined,
+          // CRITICAL: Don't set domain for IP addresses (127.0.0.1) - browsers reject it
+          // Browsers automatically scope cookies to the exact origin for IP addresses
+          domain: isDevelopment ? undefined : undefined, // No domain for IP addresses or localhost
           secure: !isDevelopment, // false for HTTP localhost, true for HTTPS production
           sameSite: 'lax', // Lax for localhost, will be overridden to None for cross-site OAuth in production
           path: '/',
@@ -47,19 +44,49 @@ export async function GET(request: Request) {
       }
     )
 
-    // Log cookies for debugging
+    // Enhanced logging for debugging
     if (process.env.NODE_ENV === 'development') {
       const allCookies = cookieStore.getAll()
-      console.log('[Auth Callback] Cookies available:', allCookies.map(c => c.name))
+      console.log('[Auth Callback] ===== AUTH CALLBACK DEBUG =====')
+      console.log('[Auth Callback] Request URL:', url.toString())
+      console.log('[Auth Callback] Code parameter:', code ? 'present' : 'missing')
+      console.log('[Auth Callback] Cookies available:', allCookies.map(c => ({ name: c.name, value: c.value.substring(0, 20) + '...' })))
+      console.log('[Auth Callback] Cookie count:', allCookies.length)
+      
+      // Check for PKCE code verifier
+      const codeVerifierCookie = allCookies.find(c => c.name.includes('code-verifier'))
+      console.log('[Auth Callback] Code verifier cookie:', codeVerifierCookie ? 'FOUND' : 'MISSING')
+      
+      // Check for auth token
+      const authTokenCookie = allCookies.find(c => c.name.includes('auth-token') && !c.name.includes('code-verifier'))
+      console.log('[Auth Callback] Auth token cookie before exchange:', authTokenCookie ? 'EXISTS' : 'MISSING')
+      console.log('[Auth Callback] Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
+      console.log('[Auth Callback] =================================')
     }
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     
     if (error) {
-      console.error('[Auth Callback] Exchange error:', error.message)
+      console.error('[Auth Callback] ===== EXCHANGE ERROR =====')
+      console.error('[Auth Callback] Error message:', error.message)
+      console.error('[Auth Callback] Error name:', error.name)
+      console.error('[Auth Callback] Full error:', JSON.stringify(error, null, 2))
+      console.error('[Auth Callback] =========================')
+      
       const errorUrl = new URL('/auth/auth-code-error', url.origin)
       errorUrl.searchParams.set('error', error.message)
       return NextResponse.redirect(errorUrl)
+    }
+
+    // Log success
+    if (process.env.NODE_ENV === 'development') {
+      const cookiesAfter = cookieStore.getAll()
+      const authTokenAfter = cookiesAfter.find(c => c.name.includes('auth-token') && !c.name.includes('code-verifier'))
+      console.log('[Auth Callback] ===== EXCHANGE SUCCESS =====')
+      console.log('[Auth Callback] Auth token cookie after exchange:', authTokenAfter ? 'SET' : 'MISSING')
+      console.log('[Auth Callback] Total cookies after:', cookiesAfter.length)
+      console.log('[Auth Callback] Redirecting to:', nextPath)
+      console.log('[Auth Callback] ============================')
     }
 
     // Redirect to the next path
