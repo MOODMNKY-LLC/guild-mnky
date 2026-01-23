@@ -46,7 +46,7 @@ export async function updateSession(request: NextRequest, redirectResponse?: Nex
         },
       },
       cookieOptions: {
-        domain: isDevelopment ? 'localhost' : undefined, // Explicitly set domain for localhost in dev
+        domain: isDevelopment ? '127.0.0.1' : undefined, // Explicitly set domain to match Supabase CLI binding
         secure: !isDevelopment, // false for HTTP localhost, true for HTTPS production
         sameSite: 'lax', // Lax for localhost, will be overridden to None for cross-site OAuth in production
         path: '/',
