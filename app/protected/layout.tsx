@@ -1,8 +1,5 @@
-import { DeployButton } from "@/components/deploy-button";
-import { EnvVarWarning } from "@/components/env-var-warning";
 import { AuthButton } from "@/components/auth-button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
-import { hasEnvVars } from "@/lib/utils";
 import Link from "next/link";
 import { Suspense } from "react";
 
@@ -12,44 +9,56 @@ export default function ProtectedLayout({
   children: React.ReactNode;
 }) {
   return (
-    <main className="min-h-screen flex flex-col items-center">
-      <div className="flex-1 w-full flex flex-col gap-20 items-center">
-        <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16">
-          <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
-            <div className="flex gap-5 items-center font-semibold">
-              <Link href={"/"}>Next.js Supabase Starter</Link>
-              <div className="flex items-center gap-2">
-                <DeployButton />
-              </div>
-            </div>
-            {!hasEnvVars ? (
-              <EnvVarWarning />
-            ) : (
-              <Suspense>
-                <AuthButton />
-              </Suspense>
-            )}
+    <div className="min-h-screen">
+      <header className="border-b border-border/60 bg-background/80 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
+          <Link href="/" className="font-display text-lg font-semibold">
+            Jupiter's Girth HQ
+          </Link>
+          <div className="flex items-center gap-3">
+            <Suspense fallback={<span className="text-xs">Loading...</span>}>
+              <AuthButton />
+            </Suspense>
+            <ThemeSwitcher />
           </div>
-        </nav>
-        <div className="flex-1 flex flex-col gap-20 max-w-5xl p-5">
-          {children}
         </div>
-
-        <footer className="w-full flex items-center justify-center border-t mx-auto text-center text-xs gap-8 py-16">
-          <p>
-            Powered by{" "}
-            <a
-              href="https://supabase.com/?utm_source=create-next-app&utm_medium=template&utm_term=nextjs"
-              target="_blank"
-              className="font-bold hover:underline"
-              rel="noreferrer"
-            >
-              Supabase
-            </a>
+      </header>
+      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-10 sm:px-6 lg:grid-cols-[220px_1fr]">
+        <aside className="rounded-2xl border border-border/70 bg-card/80 p-4">
+          <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+            Navigation
           </p>
-          <ThemeSwitcher />
-        </footer>
+          <nav className="mt-4 flex flex-col gap-2 text-sm font-medium text-muted-foreground">
+            <Link href="/protected" className="rounded-lg px-3 py-2 hover:bg-accent/60 hover:text-foreground">
+              Community hub
+            </Link>
+            <Link href="/events" className="rounded-lg px-3 py-2 hover:bg-accent/60 hover:text-foreground">
+              Events
+            </Link>
+            <Link href="/lfg" className="rounded-lg px-3 py-2 hover:bg-accent/60 hover:text-foreground">
+              LFG board
+            </Link>
+            <Link href="/guides" className="rounded-lg px-3 py-2 hover:bg-accent/60 hover:text-foreground">
+              Guides
+            </Link>
+            <Link href="/roster" className="rounded-lg px-3 py-2 hover:bg-accent/60 hover:text-foreground">
+              Roster
+            </Link>
+            <Link href="/integrations" className="rounded-lg px-3 py-2 hover:bg-accent/60 hover:text-foreground">
+              Integrations
+            </Link>
+            <Link href="/protected/settings" className="rounded-lg px-3 py-2 hover:bg-accent/60 hover:text-foreground">
+              Settings
+            </Link>
+            <Link href="/protected/admin" className="rounded-lg px-3 py-2 hover:bg-accent/60 hover:text-foreground text-primary">
+              Admin Panel
+            </Link>
+          </nav>
+        </aside>
+        <section className="rounded-2xl border border-border/70 bg-card/80 p-6 shadow-sm">
+          {children}
+        </section>
       </div>
-    </main>
+    </div>
   );
 }
