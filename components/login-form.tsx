@@ -61,12 +61,22 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
         protocol: window.location.protocol,
       })
 
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
         options: {
           redirectTo: `${window.location.origin}/auth/callback?next=/account`,
+          // PKCE is the default flow for SSR - no need to specify
+          // The cookie storage fix ensures the code verifier is set synchronously
         },
       })
+
+      // Log the OAuth response for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Login Form] OAuth response:', { data, error })
+        if (data?.url) {
+          console.log('[Login Form] OAuth redirect URL:', data.url)
+        }
+      }
 
       if (error) {
         oauthInitiatedRef.current = false

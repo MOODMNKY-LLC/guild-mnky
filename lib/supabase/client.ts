@@ -23,15 +23,23 @@ export function createClient() {
       cookies: {
         getAll() {
           // Parse document.cookie into array of { name, value } objects
+          // CRITICAL: Don't decode here - Supabase expects raw cookie values
           const cookies: { name: string; value: string }[] = []
           if (typeof document !== 'undefined') {
             document.cookie.split(';').forEach(cookie => {
-              const [name, ...valueParts] = cookie.trim().split('=')
-              if (name) {
-                cookies.push({
-                  name: decodeURIComponent(name),
-                  value: decodeURIComponent(valueParts.join('='))
-                })
+              const trimmed = cookie.trim()
+              if (!trimmed) return
+              
+              const equalIndex = trimmed.indexOf('=')
+              if (equalIndex === -1) {
+                // Cookie with no value
+                cookies.push({ name: trimmed, value: '' })
+              } else {
+                const name = trimmed.substring(0, equalIndex).trim()
+                const value = trimmed.substring(equalIndex + 1).trim()
+                if (name) {
+                  cookies.push({ name, value })
+                }
               }
             })
           }
@@ -42,7 +50,11 @@ export function createClient() {
           // This ensures PKCE code verifier is set before OAuth redirect
           if (typeof document !== 'undefined') {
             cookiesToSet.forEach(({ name, value, options }) => {
-              // Build cookie string with proper attributes
+              // Check protocol at runtime (not module load time) to avoid SSR issues
+              const isProduction = typeof window !== 'undefined' && window.location.protocol === 'https:'
+              
+              // Build cookie string - encode name and value properly
+              // Note: document.cookie expects URL-encoded values
               let cookieString = `${encodeURIComponent(name)}=${encodeURIComponent(value)}`
               
               // Set path (default to /)
@@ -56,36 +68,53 @@ export function createClient() {
               // For OAuth redirects (cross-site), we need SameSite=None; Secure
               // But SameSite=None requires Secure, which requires HTTPS
               // On localhost HTTP, we use SameSite=Lax (less secure but works)
-              // Check protocol at runtime (not module load time) to avoid SSR issues
-              const isProduction = typeof window !== 'undefined' && window.location.protocol === 'https:'
               if (isProduction) {
                 cookieString += '; SameSite=None; Secure'
               } else {
-                cookieString += `; SameSite=${options?.sameSite || 'Lax'}`
+                // Use the option's sameSite if provided, otherwise default to Lax
+                // Handle type: sameSite can be true | "lax" | "strict" | "none"
+                const sameSiteValue = options?.sameSite
+                let sameSiteStr = 'Lax'
+                if (typeof sameSiteValue === 'string') {
+                  sameSiteStr = sameSiteValue.charAt(0).toUpperCase() + sameSiteValue.slice(1)
+                } else if (sameSiteValue === true) {
+                  sameSiteStr = 'Lax' // Default to Lax if true
+                }
+                cookieString += `; SameSite=${sameSiteStr}`
               }
               
-              // Set maxAge if provided
-              if (options?.maxAge) {
+              // Set maxAge if provided (convert to seconds)
+              if (options?.maxAge !== undefined) {
                 cookieString += `; max-age=${options.maxAge}`
               }
               
               // Set domain if provided (but not for localhost)
-              if (options?.domain && !window.location.hostname.includes('localhost')) {
+              if (options?.domain && typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
                 cookieString += `; domain=${options.domain}`
               }
               
-              // Set cookie synchronously
+              // Set cookie synchronously - this MUST happen before redirect
               document.cookie = cookieString
               
-              // Log for debugging (only in development)
+              // Verify cookie was set (for debugging)
               if (process.env.NODE_ENV === 'development' && name.includes('code-verifier')) {
-                const isProduction = typeof window !== 'undefined' && window.location.protocol === 'https:'
+                // Check if cookie is actually readable
+                const cookieWasSet = document.cookie.includes(encodeURIComponent(name))
                 console.log('[Supabase Client] PKCE code verifier cookie set:', {
                   name,
                   valueLength: value.length,
-                  cookieString: cookieString.substring(0, 100) + '...',
+                  cookieWasSet,
                   isProduction,
+                  sameSite: isProduction ? 'None' : (options?.sameSite || 'Lax'),
+                  path: options?.path || '/',
                 })
+                
+                // Also log all cookies to verify
+                setTimeout(() => {
+                  const allCookies = document.cookie.split(';').map(c => c.trim().split('=')[0])
+                  console.log('[Supabase Client] All cookies after setting:', allCookies)
+                  console.log('[Supabase Client] Code verifier cookie present:', allCookies.some(n => n.includes('code-verifier') || n.includes('verifier')))
+                }, 10)
               }
             })
           }
