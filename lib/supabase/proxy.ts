@@ -58,6 +58,19 @@ export async function updateSession(request: NextRequest, redirectResponse?: Nex
         // Enable automatic session detection from URL for PKCE flow
         detectSessionInUrl: true,
         flowType: 'pkce',
+        // Custom storage for PKCE verifier in cookies
+        storage: {
+          getItem: (key: string) => {
+            // For PKCE-related keys, read from request cookies
+            if (key.includes('verifier') || key.includes('code') || key.includes('pkce')) {
+              const cookie = request.cookies.get(key)
+              return cookie?.value || null
+            }
+            return null
+          },
+          setItem: () => {}, // Proxy doesn't set PKCE items
+          removeItem: () => {}, // Proxy doesn't remove PKCE items
+        },
       },
     },
   );

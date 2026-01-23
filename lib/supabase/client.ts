@@ -78,6 +78,78 @@ export function createClient() {
         // Enable automatic session detection from URL for PKCE flow
         detectSessionInUrl: true,
         flowType: 'pkce',
+        // CRITICAL: Custom storage for PKCE verifier - must be in cookies for SSR
+        storage: {
+          getItem: (key: string) => {
+            if (typeof document === 'undefined') return null
+
+            // For PKCE-related keys, check cookies (accessible to server)
+            if (key.includes('verifier') || key.includes('code') || key.includes('pkce')) {
+              const cookies = document.cookie.split(';')
+              for (const cookie of cookies) {
+                const [name, value] = cookie.trim().split('=')
+                if (name === key) {
+                  const decodedValue = decodeURIComponent(value || '')
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log('[Browser Client] PKCE item retrieved from cookie:', {
+                      key,
+                      valueLength: decodedValue.length
+                    })
+                  }
+                  return decodedValue
+                }
+              }
+            }
+
+            // For other auth data, use localStorage
+            try {
+              return localStorage.getItem(key)
+            } catch {
+              return null
+            }
+          },
+          setItem: (key: string, value: string) => {
+            if (typeof document === 'undefined') return
+
+            // For PKCE-related keys, store in cookies (accessible to server)
+            if (key.includes('verifier') || key.includes('code') || key.includes('pkce')) {
+              const cookieString = `${encodeURIComponent(key)}=${encodeURIComponent(value)}; path=/; SameSite=Lax`
+              document.cookie = cookieString
+
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[Browser Client] PKCE item stored in cookie:', {
+                  key,
+                  valueLength: value.length,
+                  allCookies: document.cookie.split(';').map(c => c.trim().split('=')[0])
+                })
+              }
+              return
+            }
+
+            // For other auth data, use localStorage
+            try {
+              localStorage.setItem(key, value)
+            } catch {
+              // Ignore localStorage errors
+            }
+          },
+          removeItem: (key: string) => {
+            if (typeof document === 'undefined') return
+
+            // For PKCE-related keys, remove from cookies
+            if (key.includes('verifier') || key.includes('code') || key.includes('pkce')) {
+              document.cookie = `${encodeURIComponent(key)}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`
+              return
+            }
+
+            // For other auth data, remove from localStorage
+            try {
+              localStorage.removeItem(key)
+            } catch {
+              // Ignore localStorage errors
+            }
+          },
+        },
       },
     }
   );

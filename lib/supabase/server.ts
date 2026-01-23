@@ -29,6 +29,27 @@ export async function createClient() {
           }
         },
       },
+      auth: {
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+        // Custom storage for PKCE verifier in cookies
+        storage: {
+          getItem: (key: string) => {
+            // For PKCE-related keys, read from cookieStore
+            if (key.includes('verifier') || key.includes('code') || key.includes('pkce')) {
+              try {
+                const cookie = cookieStore.get(key)
+                return cookie?.value || null
+              } catch {
+                return null
+              }
+            }
+            return null
+          },
+          setItem: () => {}, // Server components don't set PKCE items
+          removeItem: () => {}, // Server components don't remove PKCE items
+        },
+      },
     },
   );
 }

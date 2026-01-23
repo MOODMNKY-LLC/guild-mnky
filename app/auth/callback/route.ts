@@ -40,6 +40,27 @@ export async function GET(request: Request) {
           // Enable automatic session detection from URL for PKCE flow
           detectSessionInUrl: true,
           flowType: 'pkce',
+          // Custom storage to read PKCE verifier from cookies
+          storage: {
+            getItem: (key: string) => {
+              // For PKCE-related keys, read from cookieStore
+              if (key.includes('verifier') || key.includes('code') || key.includes('pkce')) {
+                const cookie = cookieStore.get(key)
+                if (cookie) {
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log('[Server Callback] PKCE item retrieved from cookie:', {
+                      key,
+                      valueLength: cookie.value.length
+                    })
+                  }
+                  return cookie.value
+                }
+              }
+              return null
+            },
+            setItem: () => {}, // Server doesn't need to set PKCE items
+            removeItem: () => {}, // Server doesn't need to remove PKCE items
+          },
         },
       }
     )
