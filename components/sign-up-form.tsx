@@ -29,11 +29,12 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
         options: {
-          redirectTo: `${window.location.origin}/account`,
+          redirectTo: `${window.location.origin}/auth/callback?next=/account`,
         },
       })
 
       if (error) throw error
+      // Note: User will be redirected to Discord, then back to callback route
     } catch (error: unknown) {
       console.error('Discord signup error:', error)
     }

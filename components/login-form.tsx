@@ -31,11 +31,13 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
         options: {
-          redirectTo: `${window.location.origin}/account`,
+          redirectTo: `${window.location.origin}/auth/callback?next=/account`,
         },
       })
 
       if (error) throw error
+      // Note: User will be redirected to Discord, then back to callback route
+      // Don't set loading to false here as the redirect will happen
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
       setIsLoading(false)

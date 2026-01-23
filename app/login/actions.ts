@@ -15,9 +15,14 @@ export async function login(formData: FormData) {
     password: formData.get('password') as string,
   }
 
-  const { error } = await supabase.auth.signInWithPassword(data)
+  const { data: authData, error } = await supabase.auth.signInWithPassword(data)
 
   if (error) {
+    redirect('/auth/error')
+  }
+
+  // Verify the session was established before redirecting
+  if (!authData.session) {
     redirect('/auth/error')
   }
 
@@ -35,12 +40,19 @@ export async function signup(formData: FormData) {
     password: formData.get('password') as string,
   }
 
-  const { error } = await supabase.auth.signUp(data)
+  const { data: authData, error } = await supabase.auth.signUp(data)
 
   if (error) {
     redirect('/auth/error')
   }
 
-  revalidatePath('/', 'layout')
-  redirect('/account')
+  // For email signup, user might need to confirm email first
+  // Only redirect if session is immediately available
+  if (authData.session) {
+    revalidatePath('/', 'layout')
+    redirect('/account')
+  } else {
+    // User needs to confirm email - redirect to success page
+    redirect('/auth/sign-up-success')
+  }
 }
