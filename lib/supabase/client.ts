@@ -113,13 +113,16 @@ export function createClient() {
 
             // For PKCE-related keys, store in cookies (accessible to server)
             if (key.includes('verifier') || key.includes('code') || key.includes('pkce')) {
-              const cookieString = `${encodeURIComponent(key)}=${encodeURIComponent(value)}; path=/; SameSite=Lax`
+              // Set cookie with domain that works for both localhost and 127.0.0.1
+              const cookieOptions = 'path=/; SameSite=Lax'
+              const cookieString = `${encodeURIComponent(key)}=${encodeURIComponent(value)}; ${cookieOptions}`
               document.cookie = cookieString
 
               if (process.env.NODE_ENV === 'development') {
                 console.log('[Browser Client] PKCE item stored in cookie:', {
                   key,
                   valueLength: value.length,
+                  cookieString: cookieString.substring(0, 100) + '...',
                   allCookies: document.cookie.split(';').map(c => c.trim().split('=')[0])
                 })
               }

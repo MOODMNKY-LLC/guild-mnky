@@ -56,10 +56,22 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
         })
       }
 
+      // Normalize redirect URL to use localhost instead of 127.0.0.1 for cookie consistency
+      const normalizeOrigin = window.location.origin.replace('127.0.0.1', 'localhost')
+      const redirectUrl = `${normalizeOrigin}/auth/callback?next=/account`
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Login Form] Normalized redirect URL:', {
+          original: window.location.origin,
+          normalized: normalizeOrigin,
+          final: redirectUrl,
+        })
+      }
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=/account`,
+          redirectTo: redirectUrl,
         },
       })
 
