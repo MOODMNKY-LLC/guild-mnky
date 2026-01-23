@@ -16,9 +16,6 @@ export function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const projectRef = supabaseUrl.split('//')[1]?.split('.')[0] || supabaseUrl.split('/').pop() || 'unknown'
   
-  // Determine if we're in production (HTTPS) or development (HTTP)
-  const isProduction = typeof window !== 'undefined' && window.location.protocol === 'https:'
-  
   return createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY!,
@@ -59,6 +56,8 @@ export function createClient() {
               // For OAuth redirects (cross-site), we need SameSite=None; Secure
               // But SameSite=None requires Secure, which requires HTTPS
               // On localhost HTTP, we use SameSite=Lax (less secure but works)
+              // Check protocol at runtime (not module load time) to avoid SSR issues
+              const isProduction = typeof window !== 'undefined' && window.location.protocol === 'https:'
               if (isProduction) {
                 cookieString += '; SameSite=None; Secure'
               } else {
@@ -80,6 +79,7 @@ export function createClient() {
               
               // Log for debugging (only in development)
               if (process.env.NODE_ENV === 'development' && name.includes('code-verifier')) {
+                const isProduction = typeof window !== 'undefined' && window.location.protocol === 'https:'
                 console.log('[Supabase Client] PKCE code verifier cookie set:', {
                   name,
                   valueLength: value.length,
@@ -94,8 +94,9 @@ export function createClient() {
       cookieOptions: {
         name: `sb-${projectRef}-auth-token`,
         path: '/',
-        sameSite: isProduction ? 'none' : 'lax',
-        secure: isProduction,
+        // Use 'lax' as default - will be overridden to 'none' in setAll for HTTPS
+        sameSite: 'lax',
+        secure: false, // Will be set to true in setAll for HTTPS
         maxAge: 400 * 24 * 60 * 60, // 400 days (default from @supabase/ssr)
       },
     }
