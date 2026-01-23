@@ -2,22 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { updateSession } from "@/lib/supabase/proxy"
 
 export async function proxy(request: NextRequest) {
-  // Debug logging for all requests
-  if (process.env.NODE_ENV === 'development') {
-    const cookies = request.cookies.getAll()
-    console.log('[Proxy] Request:', {
-      pathname: request.nextUrl.pathname,
-      hasCode: request.nextUrl.searchParams.has('code'),
-      cookieCount: cookies.length,
-      cookieNames: cookies.map(c => c.name),
-      method: request.method,
-      headers: {
-        cookie: request.headers.get('cookie') ? 'present' : 'none',
-        referer: request.headers.get('referer'),
-      }
-    })
-  }
-
   // If Discord redirects to root with a code parameter, redirect to callback route
   // This ensures the code is always handled server-side
   if (request.nextUrl.pathname === '/' && request.nextUrl.searchParams.has('code')) {
@@ -26,16 +10,6 @@ export async function proxy(request: NextRequest) {
     const callbackUrl = new URL('/auth/callback', request.url)
     callbackUrl.searchParams.set('code', code!)
     callbackUrl.searchParams.set('next', next)
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[Proxy] Redirecting OAuth callback:', {
-        from: request.nextUrl.pathname,
-        to: callbackUrl.pathname,
-        codeLength: code?.length,
-        next,
-      })
-    }
-
     const redirectResponse = NextResponse.redirect(callbackUrl)
     return updateSession(request, redirectResponse)
   }

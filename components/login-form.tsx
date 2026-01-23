@@ -48,30 +48,23 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
     oauthInitiatedRef.current = true
 
     try {
-      // Log before OAuth for debugging
+      // Log cookies before OAuth initiation for debugging
       if (process.env.NODE_ENV === 'development') {
-        console.log('[Login Form] Starting Discord OAuth:', {
-          redirectTo: `${window.location.origin}/auth/callback?next=/account`,
-          origin: window.location.origin,
-        })
+        console.log('[Login Form] Cookies before OAuth:', document.cookie.split(';').map(c => c.trim().split('=')[0]))
       }
 
-      // Normalize redirect URL to use localhost instead of 127.0.0.1 for cookie consistency
-      const normalizeOrigin = window.location.origin.replace('127.0.0.1', 'localhost')
-      const redirectUrl = `${normalizeOrigin}/auth/callback?next=/account`
+      // CRITICAL: Verify we're using the correct client
+      console.log('[Login Form] Supabase client created:', {
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+        hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+        origin: window.location.origin,
+        protocol: window.location.protocol,
+      })
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Login Form] Normalized redirect URL:', {
-          original: window.location.origin,
-          normalized: normalizeOrigin,
-          final: redirectUrl,
-        })
-      }
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
         options: {
-          redirectTo: redirectUrl,
+          redirectTo: `${window.location.origin}/auth/callback?next=/account`,
         },
       })
 
@@ -80,28 +73,49 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
         throw error
       }
 
-      // Log the OAuth response for debugging
+      // Log cookies after OAuth initiation (before redirect)
+      // CRITICAL: Check immediately and with delay to catch async cookie setting
       if (process.env.NODE_ENV === 'development') {
-        console.log('[Login Form] OAuth initiated successfully:', {
-          hasUrl: !!data?.url,
-          provider: 'discord',
-        })
-
-        // Check cookies immediately after OAuth initiation
-        const checkCookies = () => {
-          const cookies = document.cookie.split(';').map(c => c.trim())
-          const supabaseCookies = cookies.filter(c => c.includes('sb-') || c.includes('verifier'))
-          console.log('[Login Form] Cookies after OAuth initiation:', {
-            totalCookies: cookies.length,
-            supabaseCookies,
-            allCookies: cookies,
+        // Parse all cookies into name-value pairs
+        const parseCookies = () => {
+          const cookies: Record<string, string> = {}
+          document.cookie.split(';').forEach(cookie => {
+            const [name, ...valueParts] = cookie.trim().split('=')
+            if (name) {
+              cookies[name] = decodeURIComponent(valueParts.join('='))
+            }
           })
+          return cookies
         }
-
-        // Check immediately and after a short delay
-        checkCookies()
-        setTimeout(checkCookies, 50)
-        setTimeout(checkCookies, 200)
+        
+        const cookiesBefore = parseCookies()
+        console.log('[Login Form] Cookies immediately after signInWithOAuth:', cookiesBefore)
+        console.log('[Login Form] Cookie count:', Object.keys(cookiesBefore).length)
+        console.log('[Login Form] All cookie names:', Object.keys(cookiesBefore))
+        
+        // Check for Supabase-specific cookies (they use sb- prefix and project ref)
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+        const projectRef = supabaseUrl.split('//')[1]?.split('.')[0] || supabaseUrl.split('/').pop() || 'unknown'
+        const supabaseCookiePattern = new RegExp(`sb-.*-auth-token|sb-.*-code-verifier|${projectRef}`, 'i')
+        
+        const supabaseCookies = Object.keys(cookiesBefore).filter(name => 
+          supabaseCookiePattern.test(name) ||
+          name.includes('sb-') || 
+          name.includes('supabase') || 
+          name.includes('code-verifier') ||
+          name.includes('auth-token') ||
+          name.includes('verifier')
+        )
+        console.log('[Login Form] Supabase-related cookies found:', supabaseCookies)
+        console.log('[Login Form] Project ref from URL:', projectRef)
+        
+        // Small delay to allow cookie to be set (cookies might be set asynchronously)
+        setTimeout(() => {
+          const cookiesAfter = parseCookies()
+          console.log('[Login Form] Cookies after 100ms delay:', cookiesAfter)
+          console.log('[Login Form] Cookie count after delay:', Object.keys(cookiesAfter).length)
+          console.log('[Login Form] New cookies:', Object.keys(cookiesAfter).filter(name => !cookiesBefore[name]))
+        }, 100)
       }
 
       // Note: User will be redirected to Discord, then back to callback route

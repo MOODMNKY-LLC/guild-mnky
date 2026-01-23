@@ -19,15 +19,17 @@ export async function updateSession(request: NextRequest, redirectResponse?: Nex
   // variable. Always create a new one on each request.
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY!,
     {
       cookies: {
         getAll() {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          // CRITICAL: Always create a new response if we don't have one
-          // This ensures cookies are properly set on the response
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value),
+          );
+          // Only create a new response if we don't already have one (e.g., redirect response)
           if (!redirectResponse) {
             supabaseResponse = NextResponse.next({
               request,
@@ -36,40 +38,6 @@ export async function updateSession(request: NextRequest, redirectResponse?: Nex
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           );
-
-          // Debug logging
-          if (process.env.NODE_ENV === 'development' && cookiesToSet.length > 0) {
-            console.log('[Proxy] Setting cookies:', cookiesToSet.map(c => ({
-              name: c.name,
-              valueLength: c.value.length,
-              options: c.options
-            })))
-          }
-        },
-      },
-      cookieOptions: {
-        name: `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL!.split('//')[1]?.split('.')[0] || 'unknown'}-auth-token`,
-        path: '/',
-        sameSite: 'lax',
-        secure: false,
-        maxAge: 400 * 24 * 60 * 60,
-      },
-      auth: {
-        // Enable automatic session detection from URL for PKCE flow
-        detectSessionInUrl: true,
-        flowType: 'pkce',
-        // Custom storage for PKCE verifier in cookies
-        storage: {
-          getItem: (key: string) => {
-            // For PKCE-related keys, read from request cookies
-            if (key.includes('verifier') || key.includes('code') || key.includes('pkce')) {
-              const cookie = request.cookies.get(key)
-              return cookie?.value || null
-            }
-            return null
-          },
-          setItem: () => {}, // Proxy doesn't set PKCE items
-          removeItem: () => {}, // Proxy doesn't remove PKCE items
         },
       },
     },

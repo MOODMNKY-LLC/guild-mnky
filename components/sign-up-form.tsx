@@ -37,14 +37,10 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
     oauthInitiatedRef.current = true
 
     try {
-      // Normalize redirect URL to use localhost instead of 127.0.0.1 for cookie consistency
-      const normalizeOrigin = window.location.origin.replace('127.0.0.1', 'localhost')
-      const redirectUrl = `${normalizeOrigin}/auth/callback?next=/account`
-
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
         options: {
-          redirectTo: redirectUrl,
+          redirectTo: `${window.location.origin}/auth/callback?next=/account`,
         },
       })
 

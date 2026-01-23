@@ -11,7 +11,7 @@ export async function createClient() {
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
       cookies: {
         getAll() {
@@ -27,27 +27,6 @@ export async function createClient() {
             // This can be ignored if you have proxy refreshing
             // user sessions.
           }
-        },
-      },
-      auth: {
-        detectSessionInUrl: true,
-        flowType: 'pkce',
-        // Custom storage for PKCE verifier in cookies
-        storage: {
-          getItem: (key: string) => {
-            // For PKCE-related keys, read from cookieStore
-            if (key.includes('verifier') || key.includes('code') || key.includes('pkce')) {
-              try {
-                const cookie = cookieStore.get(key)
-                return cookie?.value || null
-              } catch {
-                return null
-              }
-            }
-            return null
-          },
-          setItem: () => {}, // Server components don't set PKCE items
-          removeItem: () => {}, // Server components don't remove PKCE items
         },
       },
     },
