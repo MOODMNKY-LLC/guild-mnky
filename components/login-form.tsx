@@ -13,21 +13,54 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { MessageCircle } from 'lucide-react'
 import { login, signup } from '@/app/login/actions'
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
+  const searchParams = useSearchParams()
   const [showEmailForm, setShowEmailForm] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const oauthInitiatedRef = useRef(false)
+
+  // Check for error messages from URL (e.g., stale_session)
+  useEffect(() => {
+    const urlError = searchParams.get('error')
+    const urlMessage = searchParams.get('message')
+    if (urlError === 'stale_session' && urlMessage) {
+      setError(urlMessage)
+    } else if (urlError) {
+      setError('An authentication error occurred. Please try again.')
+    }
+  }, [searchParams])
 
   const handleDiscordLogin = async () => {
+    // Prevent multiple simultaneous OAuth initiations
+    if (oauthInitiatedRef.current || isLoading) {
+      return
+    }
+
     const supabase = createClient()
     setIsLoading(true)
     setError(null)
+    oauthInitiatedRef.current = true
 
     try {
+      // Log cookies before OAuth initiation for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Login Form] Cookies before OAuth:', document.cookie.split(';').map(c => c.trim().split('=')[0]))
+      }
+
+      // CRITICAL: Verify we're using the correct client
+      console.log('[Login Form] Supabase client created:', {
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+        hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+        origin: window.location.origin,
+        protocol: window.location.protocol,
+      })
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
         options: {
@@ -35,12 +68,63 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
         },
       })
 
-      if (error) throw error
+      if (error) {
+        oauthInitiatedRef.current = false
+        throw error
+      }
+
+      // Log cookies after OAuth initiation (before redirect)
+      // CRITICAL: Check immediately and with delay to catch async cookie setting
+      if (process.env.NODE_ENV === 'development') {
+        // Parse all cookies into name-value pairs
+        const parseCookies = () => {
+          const cookies: Record<string, string> = {}
+          document.cookie.split(';').forEach(cookie => {
+            const [name, ...valueParts] = cookie.trim().split('=')
+            if (name) {
+              cookies[name] = decodeURIComponent(valueParts.join('='))
+            }
+          })
+          return cookies
+        }
+        
+        const cookiesBefore = parseCookies()
+        console.log('[Login Form] Cookies immediately after signInWithOAuth:', cookiesBefore)
+        console.log('[Login Form] Cookie count:', Object.keys(cookiesBefore).length)
+        console.log('[Login Form] All cookie names:', Object.keys(cookiesBefore))
+        
+        // Check for Supabase-specific cookies (they use sb- prefix and project ref)
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+        const projectRef = supabaseUrl.split('//')[1]?.split('.')[0] || supabaseUrl.split('/').pop() || 'unknown'
+        const supabaseCookiePattern = new RegExp(`sb-.*-auth-token|sb-.*-code-verifier|${projectRef}`, 'i')
+        
+        const supabaseCookies = Object.keys(cookiesBefore).filter(name => 
+          supabaseCookiePattern.test(name) ||
+          name.includes('sb-') || 
+          name.includes('supabase') || 
+          name.includes('code-verifier') ||
+          name.includes('auth-token') ||
+          name.includes('verifier')
+        )
+        console.log('[Login Form] Supabase-related cookies found:', supabaseCookies)
+        console.log('[Login Form] Project ref from URL:', projectRef)
+        
+        // Small delay to allow cookie to be set (cookies might be set asynchronously)
+        setTimeout(() => {
+          const cookiesAfter = parseCookies()
+          console.log('[Login Form] Cookies after 100ms delay:', cookiesAfter)
+          console.log('[Login Form] Cookie count after delay:', Object.keys(cookiesAfter).length)
+          console.log('[Login Form] New cookies:', Object.keys(cookiesAfter).filter(name => !cookiesBefore[name]))
+        }, 100)
+      }
+
       // Note: User will be redirected to Discord, then back to callback route
       // Don't set loading to false here as the redirect will happen
+      // The ref will reset when the component remounts after redirect
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
       setIsLoading(false)
+      oauthInitiatedRef.current = false
     }
   }
 
@@ -55,6 +139,13 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* Error Display */}
+          {error && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          
           {/* Discord Login - Primary */}
           <div className="space-y-4">
             <Button
