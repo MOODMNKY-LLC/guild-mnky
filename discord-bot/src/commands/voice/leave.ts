@@ -4,7 +4,7 @@
  */
 
 import { ChatInputCommandInteraction } from "discord.js";
-import { sessions } from "./join.js";
+import { getActiveSession, clearActiveSession } from "./join.js";
 import { botLogger } from "../../utils/logger.js";
 import { getGuildName } from "../../config/constants.js";
 
@@ -20,21 +20,32 @@ export async function handleVoiceLeave(
     return;
   }
 
-  const session = sessions.get(interaction.guild.id);
+  const activeSession = getActiveSession();
 
-  if (!session) {
+  if (!activeSession) {
     await interaction.reply({
-      content: "❌ No active voice session in this server. Use `/voice join` first.",
+      content: "❌ No active voice session. Use `/voice join` first.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Check if the active session is in this server
+  if (activeSession.guildId !== interaction.guild.id) {
+    const currentGuildName = getGuildName(interaction.guild.id);
+    await interaction.reply({
+      content: `❌ Active voice session is in **${activeSession.guildName}**, not **${currentGuildName}**.\n\nUse \`/voice join\` in **${activeSession.guildName}** to switch servers, or ask someone in that server to use \`/voice leave\`.`,
       ephemeral: true,
     });
     return;
   }
 
   try {
-    session.stop();
-    sessions.delete(interaction.guild.id);
-
+    activeSession.session.stop();
     const currentGuildName = getGuildName(interaction.guild.id);
+    
+    // Clear active session
+    clearActiveSession();
 
     await interaction.reply({
       content: `✅ Left voice channel in **${currentGuildName}**.`,

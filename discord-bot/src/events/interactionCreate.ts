@@ -48,9 +48,32 @@ export async function handleInteractionCreate(interaction: Interaction) {
     return
   }
 
+  // For slash commands, defer immediately to prevent timeout (3 seconds)
+  // Do this BEFORE any async operations like database calls
+  let interactionDeferred = false;
+  if (interaction.isChatInputCommand()) {
+    const cmdInteraction = interaction as ChatInputCommandInteraction;
+    if (!cmdInteraction.deferred && !cmdInteraction.replied) {
+      try {
+        await cmdInteraction.deferReply({ ephemeral: true });
+        interactionDeferred = true;
+      } catch (deferError: any) {
+        // If defer fails (interaction expired), continue anyway
+        if (deferError.code !== 10062 && deferError.code !== 40060) {
+          console.warn({ deferError }, 'Failed to defer interaction');
+        }
+      }
+    }
+  }
+
   // Check if this is a known guild
   if (!isKnownGuild(interaction.guildId)) {
     console.debug(`[InteractionCreate] Unknown guild ${interaction.guildId}, ignoring interaction`)
+    if (interactionDeferred && interaction.isChatInputCommand()) {
+      try {
+        await (interaction as ChatInputCommandInteraction).editReply({ content: '❌ Unknown server.' });
+      } catch {}
+    }
     return
   }
 
@@ -58,7 +81,11 @@ export async function handleInteractionCreate(interaction: Interaction) {
   const communityId = await getCommunityByGuildId(interaction.guildId)
   if (!communityId) {
     console.error(`[InteractionCreate] No community found for guild ${interaction.guildId}`)
-    if (interaction.isRepliable()) {
+    if (interactionDeferred && interaction.isChatInputCommand()) {
+      try {
+        await (interaction as ChatInputCommandInteraction).editReply({ content: '❌ This server is not configured as a community.' });
+      } catch {}
+    } else if (interaction.isRepliable() && !interaction.replied) {
       await interaction.reply({
         content: '❌ This server is not configured as a community.',
         ephemeral: true,
@@ -96,11 +123,20 @@ export async function handleInteractionCreate(interaction: Interaction) {
       'Error handling interaction'
     )
     
+    // Only reply if interaction hasn't been handled and isn't expired
     if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-      await interaction.reply({
-        content: '❌ An error occurred while processing your request.',
-        ephemeral: true,
-      })
+      try {
+        await interaction.reply({
+          content: '❌ An error occurred while processing your request.',
+          ephemeral: true,
+        })
+      } catch (replyError: any) {
+        // Ignore "unknown interaction" and "already acknowledged" errors
+        // These mean the interaction expired or was already handled
+        if (replyError.code !== 10062 && replyError.code !== 40060) {
+          console.error({ replyError }, 'Failed to send error reply')
+        }
+      }
     }
   }
 }

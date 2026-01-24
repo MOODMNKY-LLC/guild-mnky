@@ -51,7 +51,12 @@ export function wireDiscordOpusToOpenAiPcm24k(
   if (ffmpeg.stdin) {
     pipeline(opusStream, decoder, ffmpeg.stdin, (err: Error | null) => {
       if (err) {
-        console.error("[Audio Pipeline] Decoder error:", err);
+        // Premature close errors are expected when streams are destroyed during cleanup
+        // Only log unexpected errors
+        const errorCode = (err as any).code;
+        if (errorCode !== 'ERR_STREAM_PREMATURE_CLOSE' && errorCode !== 'ERR_STREAM_DESTROYED') {
+          console.error("[Audio Pipeline] Decoder error:", err);
+        }
       }
     });
   }
@@ -60,7 +65,12 @@ export function wireDiscordOpusToOpenAiPcm24k(
   if (ffmpeg.stdout) {
     pipeline(ffmpeg.stdout, chunker, (err: Error | null) => {
       if (err) {
-        console.error("[Audio Pipeline] Chunker error:", err);
+        // Premature close errors are expected when streams are destroyed during cleanup
+        // Only log unexpected errors
+        const errorCode = (err as any).code;
+        if (errorCode !== 'ERR_STREAM_PREMATURE_CLOSE' && errorCode !== 'ERR_STREAM_DESTROYED') {
+          console.error("[Audio Pipeline] Chunker error:", err);
+        }
       }
     });
   }

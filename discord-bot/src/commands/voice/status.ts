@@ -4,31 +4,24 @@
  */
 
 import { ChatInputCommandInteraction } from "discord.js";
-import { sessions } from "./join.js";
-import { getGuildName } from "../../config/constants.js";
+import { getActiveSession } from "./join.js";
 
 export async function handleVoiceStatus(
   interaction: ChatInputCommandInteraction,
   communityId: string
 ) {
-  if (sessions.size === 0) {
+  const activeSession = getActiveSession();
+
+  if (!activeSession) {
     await interaction.reply({
-      content: "ℹ️ No active voice sessions. Use `/voice join` to start one.",
+      content: "ℹ️ No active voice session. Use `/voice join` to start one.",
       ephemeral: true,
     });
     return;
   }
 
-  const activeSessions = Array.from(sessions.entries()).map(([guildId, session]) => {
-    const guildName = getGuildName(guildId);
-    return `**${guildName}** (Guild ID: \`${guildId}\`, Channel ID: \`${session.opts.channelId}\`)`;
-  });
-
-  const sessionList = activeSessions.join("\n");
-  const count = sessions.size;
-
   await interaction.reply({
-    content: `🔊 **Active Voice Sessions** (${count})\n\n${sessionList}\n\nMultiple servers can have voice sessions simultaneously.`,
+    content: `🔊 **Active Voice Session**\n\nServer: **${activeSession.guildName}**\nGuild ID: \`${activeSession.guildId}\`\nChannel ID: \`${activeSession.session.opts.channelId}\`\n\nℹ️ Only one server can have an active voice session at a time.`,
     ephemeral: true,
   });
 }

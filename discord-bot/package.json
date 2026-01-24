@@ -8,6 +8,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "start:clean": "./scripts/start-bot.sh",
+    "stop": "./scripts/stop-bot.sh",
+    "restart": "./scripts/restart-bot.sh",
     "deploy-commands": "tsx src/deploy-commands.ts",
     "ensure-communities": "tsx scripts/ensure-communities.ts"
   },
@@ -21,8 +24,10 @@
   "license": "MIT",
   "dependencies": {
     "@discordjs/opus": "^0.9.0",
-    "@discordjs/voice": "^0.16.0",
+    "@discordjs/voice": "^0.19.0",
     "@openai/agents": "^0.0.1-alpha.12",
+    "@snazzah/davey": "^0.1.6",
+    "@snazzah/davey": "^0.1.9",
     "@supabase/supabase-js": "^2.39.3",
     "bottleneck": "^2.19.5",
     "discord.js": "^14.14.1",

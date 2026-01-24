@@ -11,11 +11,16 @@ import { makeRealtimeRouter } from "./realtimeEventRouter.js";
 export class RealtimeWsTransport implements VoiceLLMTransport {
   private ws?: WebSocket;
   private audioCb: (b64: string) => void = () => {};
+  private responseDoneCb: () => void = () => {}; // Callback when response.done fires
   private toolHandler?: ToolCallHandler;
   private sessionConfig?: { instructions: string; tools: any[]; voice?: string };
 
   onAudioDelta(cb: (pcmBase64: string) => void) {
     this.audioCb = cb;
+  }
+
+  onResponseDone(cb: () => void) {
+    this.responseDoneCb = cb;
   }
 
   setToolHandler(handler: ToolCallHandler) {
@@ -33,7 +38,8 @@ export class RealtimeWsTransport implements VoiceLLMTransport {
     }
 
     const model = process.env.OPENAI_REALTIME_MODEL || "gpt-realtime";
-    const voice = process.env.OPENAI_VOICE || "onyx";
+    // Valid voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse, marin, cedar
+    const voice = process.env.OPENAI_VOICE || "alloy";
 
     const protocols: string[] = [
       "realtime",
@@ -48,13 +54,17 @@ export class RealtimeWsTransport implements VoiceLLMTransport {
       protocols.push(`openai-project.${process.env.OPENAI_PROJECT_ID}`);
     }
 
+    // Model is always "gpt-realtime" - voice is configured in session.update
     const url = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`;
+    
+    botLogger.info({ model, voice, url }, "Connecting to OpenAI Realtime API");
 
     this.ws = new WebSocket(url, protocols);
 
     const router = makeRealtimeRouter({
       send: (e) => this.send(e),
       onAudioDelta: (b64) => this.audioCb(b64),
+      onResponseDone: () => this.responseDoneCb(),
       getToolHandler: () => this.toolHandler,
     });
 
@@ -64,26 +74,63 @@ export class RealtimeWsTransport implements VoiceLLMTransport {
       const cfg = this.sessionConfig ?? {
         instructions: "You are a Discord voice assistant. Be concise and safe.",
         tools: [],
-        voice,
+        voice: voice, // Use the voice from environment/default
       };
 
-      this.send({
+      // Reference project pattern (from configureSession method):
+      // 1. Instructions are set in session.update (NOT name - name is only in RealtimeAgent constructor)
+      // 2. Voice defaults to "alloy" in reference
+      //    Priority: cfg.voice (from configure call) > voice (env var) > "alloy"
+      // Valid voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse, marin, cedar
+      const sessionVoice = cfg.voice || voice || "alloy"; // Default to "alloy"
+      
+      console.log(`[RealtimeWS] Configuring session - Voice: ${sessionVoice}, Config voice: ${cfg.voice}, Env voice: ${voice}`);
+      botLogger.info({ 
+        configVoice: cfg.voice,
+        envVoice: voice,
+        finalVoice: sessionVoice,
+        hasSessionConfig: !!this.sessionConfig,
+        instructionsPreview: cfg.instructions.substring(0, 100) + "..."
+      }, "Voice and instructions configuration resolved");
+      
+      // Voice and instructions are configured in session.update
+      // Reference project pattern: Match their exact structure
+      const sessionUpdate = {
         type: "session.update",
         session: {
           type: "realtime",
-          modalities: ["audio", "text"],
-          instructions: cfg.instructions,
-          voice: cfg.voice,
+          model: "gpt-realtime",
+          output_modalities: ["audio"],
           audio: {
-            input: { format: { type: "audio/pcm", rate: 24000 } },
-            output: { format: { type: "audio/pcm", rate: 24000 } },
+            input: {
+              turn_detection: {
+                type: "server_vad",
+                threshold: 0.8,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 1000,
+                create_response: false,
+              },
+            },
+            output: {
+              voice: sessionVoice, // Use determined voice (defaults to "onyx")
+              speed: 1.0,
+            },
           },
           tools: cfg.tools,
           tool_choice: "auto",
-          // Optional: Enable server VAD once stable
-          // turn_detection: { type: "server_vad" },
+          instructions: cfg.instructions, // Instructions include "You are GIRTH..." (agent name/personality)
         },
-      });
+      };
+      
+      console.log(`[RealtimeWS] Sending session.update - Voice: ${sessionUpdate.session.audio.output.voice}, Instructions length: ${sessionUpdate.session.instructions.length}`);
+      this.send(sessionUpdate);
+      
+      botLogger.info({ 
+        voice: sessionVoice, 
+        model, 
+        instructionsLength: cfg.instructions.length,
+        instructionsStart: cfg.instructions.substring(0, 50) + "..."
+      }, "Session configured with voice and instructions (GIRTH personality)");
     });
 
     this.ws.on("message", async (msg) => {

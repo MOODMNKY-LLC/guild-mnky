@@ -25,6 +25,9 @@ export type VoiceLLMTransport = {
   // Subscribe to audio output: base64 PCM16 @ 24kHz deltas/chunks
   onAudioDelta(cb: (pcmBase64: string) => void): void;
 
+  // Subscribe to response completion: fires when response.done event occurs
+  onResponseDone(cb: () => void): void;
+
   // Tool handler
   setToolHandler(handler: ToolCallHandler): void;
 

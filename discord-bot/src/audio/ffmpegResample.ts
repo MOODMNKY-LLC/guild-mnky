@@ -23,6 +23,8 @@ export function makePcmResampler(params: ResampleOpts): ChildProcess {
     "-hide_banner",
     "-loglevel",
     "error",
+    "-flush_packets",
+    "1", // Force immediate output flushing for real-time streaming
     "-f",
     "s16le",
     "-ar",
@@ -37,6 +39,8 @@ export function makePcmResampler(params: ResampleOpts): ChildProcess {
     String(outRate),
     "-ac",
     String(channels),
+    "-flush_packets",
+    "1", // Also flush output packets immediately
     "pipe:1",
   ];
 

@@ -63,18 +63,32 @@ This will deploy commands to Sherpa Hub server. Commands update instantly for gu
 
 ### 4. Run the Bot
 
-Development mode (with auto-reload):
+**Development mode** (with auto-reload):
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
-Production mode:
+**Production mode** (with automatic cleanup of old processes):
 
 ```bash
-npm run build
-npm start
+pnpm build
+pnpm run start:clean
 ```
+
+**Restart bot** (stops old processes, rebuilds if needed, starts fresh):
+
+```bash
+pnpm run restart
+```
+
+**Stop bot**:
+
+```bash
+pnpm run stop
+```
+
+> **Note**: Always use `start:clean` or `restart` instead of `start` to prevent accumulation of old bot processes. See `README-PROCESS-MANAGEMENT.md` for details.
 
 ## Bot Permissions
 
