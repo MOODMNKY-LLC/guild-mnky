@@ -35,6 +35,7 @@ yarn-error.log*
 .env*.local
 .env
 .env.production
+.env.bot
 
 # cursor config with secrets
 .cursor/mcp.json

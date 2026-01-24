@@ -26,6 +26,16 @@ import { handleSherpaAdminReview } from '../commands/sherpa-admin/review.js'
 import { handleSherpaAdminList } from '../commands/sherpa-admin/list.js'
 import { handleSherpaAdminStats } from '../commands/sherpa-admin/stats.js'
 
+// Import voice command handlers
+import { handleVoiceJoin } from '../commands/voice/join.js'
+import { handleVoiceLeave } from '../commands/voice/leave.js'
+import { handleVoiceStatus } from '../commands/voice/status.js'
+
+// Import modal and button handlers
+import { handleOathAcceptance } from '../commands/sherpa/oath.js'
+import { handleApplicationModalSubmit } from '../commands/sherpa/apply.js'
+import { handleRatingModalSubmit } from '../commands/sherpa/rating.js'
+
 export async function handleInteractionCreate(interaction: Interaction) {
   // Only handle interactions in guilds (not DMs)
   if (!interaction.guildId || !interaction.guild) {
@@ -149,6 +159,23 @@ async function handleSlashCommand(
       default:
         await interaction.reply({
           content: '❌ Unknown admin subcommand.',
+          ephemeral: true,
+        })
+    }
+  } else if (commandName === 'voice') {
+    switch (subcommandName) {
+      case 'join':
+        await handleVoiceJoin(interaction, communityId)
+        break
+      case 'leave':
+        await handleVoiceLeave(interaction, communityId)
+        break
+      case 'status':
+        await handleVoiceStatus(interaction, communityId)
+        break
+      default:
+        await interaction.reply({
+          content: '❌ Unknown voice subcommand.',
           ephemeral: true,
         })
     }

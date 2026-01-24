@@ -3,7 +3,7 @@
  * Registers slash commands with Discord
  */
 
-import { REST, Routes, SlashCommandBuilder, SlashCommandSubcommandBuilder } from 'discord.js'
+import { REST, Routes, SlashCommandBuilder, SlashCommandSubcommandBuilder, ChannelType } from 'discord.js'
 import dotenv from 'dotenv'
 
 dotenv.config()
@@ -162,6 +162,33 @@ const commands = [
         .setName('stats')
         .setDescription('Display Sherpa program statistics')
     ),
+
+  // /voice command group
+  new SlashCommandBuilder()
+    .setName('voice')
+    .setDescription('Voice interaction commands (multiple servers supported)')
+    .addSubcommand(
+      new SlashCommandSubcommandBuilder()
+        .setName('join')
+        .setDescription('Join a specific voice channel and start voice interaction')
+        .addChannelOption(option =>
+          option
+            .setName('channel')
+            .setDescription('Voice channel to join')
+            .setRequired(true)
+            .addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice)
+        )
+    )
+    .addSubcommand(
+      new SlashCommandSubcommandBuilder()
+        .setName('leave')
+        .setDescription('Leave voice channel and stop voice interaction')
+    )
+    .addSubcommand(
+      new SlashCommandSubcommandBuilder()
+        .setName('status')
+        .setDescription('Check which server has an active voice session')
+    ),
 ].map(command => command.toJSON())
 
 const rest = new REST().setToken(process.env.DISCORD_BOT_TOKEN!)
@@ -171,16 +198,29 @@ async function deployCommands() {
     console.log('🔄 Started refreshing application (/) commands.')
 
     const clientId = process.env.DISCORD_CLIENT_ID!
-    const guildId = process.env.SHERPA_HUB_GUILD_ID! // Deploy to Sherpa Hub first
+    const sherpaHubGuildId = process.env.SHERPA_HUB_GUILD_ID!
+    const jupitersGirthGuildId = process.env.JUPITERS_GIRTH_GUILD_ID!
 
-    // Deploy guild-specific commands (instant updates)
-    const data = await rest.put(
-      Routes.applicationGuildCommands(clientId, guildId),
+    // Deploy to Sherpa Hub
+    console.log(`📤 Deploying commands to Sherpa Hub (${sherpaHubGuildId})...`)
+    const sherpaData = await rest.put(
+      Routes.applicationGuildCommands(clientId, sherpaHubGuildId),
       { body: commands }
     ) as any[]
+    console.log(`✅ Successfully deployed ${sherpaData.length} commands to Sherpa Hub`)
 
-    console.log(`✅ Successfully reloaded ${data.length} application (/) commands.`)
-    console.log(`📋 Commands deployed to guild: ${guildId}`)
+    // Deploy to Jupiter's Girth
+    console.log(`📤 Deploying commands to Jupiter's Girth (${jupitersGirthGuildId})...`)
+    const jupiterData = await rest.put(
+      Routes.applicationGuildCommands(clientId, jupitersGirthGuildId),
+      { body: commands }
+    ) as any[]
+    console.log(`✅ Successfully deployed ${jupiterData.length} commands to Jupiter's Girth`)
+
+    console.log(`\n✅ Successfully reloaded ${commands.length} application (/) commands.`)
+    console.log(`📋 Commands deployed to both guilds:`)
+    console.log(`   - Sherpa Hub: ${sherpaHubGuildId}`)
+    console.log(`   - Jupiter's Girth: ${jupitersGirthGuildId}`)
   } catch (error) {
     console.error('❌ Error deploying commands:', error)
     process.exit(1)

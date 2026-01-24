@@ -34,6 +34,14 @@ const requiredEnvVars = [
   'SUPABASE_SERVICE_ROLE_KEY',
 ]
 
+// Validate optional voice-related environment variables (warn if missing)
+const voiceEnvVars = ['OPENAI_API_KEY', 'OPENAI_REALTIME_MODEL']
+for (const envVar of voiceEnvVars) {
+  if (!process.env[envVar]) {
+    console.warn(`⚠️  Warning: ${envVar} not set. Voice functionality will not work.`)
+  }
+}
+
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
     console.error(`❌ Missing required environment variable: ${envVar}`)
@@ -48,6 +56,7 @@ const client = new Client({
     GatewayIntentBits.GuildMembers, // Required for SERVER MEMBERS INTENT
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent, // Optional: Only if reading message content
+    GatewayIntentBits.GuildVoiceStates, // Required for voice functionality
   ],
 })
 
