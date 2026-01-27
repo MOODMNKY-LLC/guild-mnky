@@ -483,3 +483,184 @@ export async function submitOathkeeperRating(input: SubmitOathkeeperRatingInput)
   revalidatePath('/sherpa/sessions')
   return { success: true, rating }
 }
+
+// ============================================================================
+// Admin Review Actions
+// ============================================================================
+
+export type SherpaApplicationWithProfile = {
+  id: string
+  profile_id: string
+  community_id: string
+  application_text: string
+  experience_level: string | null
+  preferred_activities: string[] | null
+  bungie_profile_url: string | null
+  status: 'pending' | 'approved' | 'rejected' | 'suspended'
+  reviewed_by: string | null
+  reviewed_at: string | null
+  rejection_reason: string | null
+  created_at: string
+  updated_at: string
+  profiles: {
+    id: string
+    username: string | null
+    full_name: string | null
+    avatar_url: string | null
+  } | null
+}
+
+/**
+ * Get all Sherpa applications for admin review
+ * Returns applications with profile information
+ */
+export async function getSherpaApplicationsForAdmin() {
+  const supabase = await createClient()
+  
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    redirect('/auth/login')
+  }
+
+  // Check if user is admin or officer
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || (profile.role !== 'admin' && profile.role !== 'officer')) {
+    throw new Error('Unauthorized: Admin or Officer access required')
+  }
+
+  // Fetch all applications with profile information
+  const { data: applications, error } = await supabase
+    .from('sherpa_applications')
+    .select(`
+      id,
+      profile_id,
+      community_id,
+      application_text,
+      experience_level,
+      preferred_activities,
+      bungie_profile_url,
+      status,
+      reviewed_by,
+      reviewed_at,
+      rejection_reason,
+      created_at,
+      updated_at,
+      profiles:profile_id (
+        id,
+        username,
+        full_name,
+        avatar_url
+      )
+    `)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(`Failed to fetch applications: ${error.message}`)
+  }
+
+  // Transform the data to match our type (Supabase returns profiles as array for relationships)
+  const transformedApplications: SherpaApplicationWithProfile[] = (applications || []).map((app: any) => ({
+    ...app,
+    profiles: Array.isArray(app.profiles) && app.profiles.length > 0 ? app.profiles[0] : null,
+  }))
+
+  return { success: true, applications: transformedApplications }
+}
+
+export type UpdateSherpaApplicationStatusInput = {
+  applicationId: string
+  status: 'approved' | 'rejected'
+  reviewReason?: string
+}
+
+/**
+ * Update Sherpa application status (approve or reject)
+ * If approved, creates a Sherpa profile
+ */
+export async function updateSherpaApplicationStatus(input: UpdateSherpaApplicationStatusInput) {
+  const supabase = await createClient()
+  
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    redirect('/auth/login')
+  }
+
+  // Check if user is admin or officer
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || (profile.role !== 'admin' && profile.role !== 'officer')) {
+    throw new Error('Unauthorized: Admin or Officer access required')
+  }
+
+  // Fetch the application
+  const { data: application, error: appError } = await supabase
+    .from('sherpa_applications')
+    .select('*')
+    .eq('id', input.applicationId)
+    .single()
+
+  if (appError || !application) {
+    throw new Error('Application not found')
+  }
+
+  if (application.status !== 'pending') {
+    throw new Error(`Application is already ${application.status}`)
+  }
+
+  // Update application status
+  const { error: updateError } = await supabase
+    .from('sherpa_applications')
+    .update({
+      status: input.status,
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
+      rejection_reason: input.status === 'rejected' ? input.reviewReason || null : null,
+    })
+    .eq('id', input.applicationId)
+
+  if (updateError) {
+    throw new Error(`Failed to update application: ${updateError.message}`)
+  }
+
+  // If approved, create Sherpa profile
+  if (input.status === 'approved') {
+    // Check if Sherpa profile already exists
+    const { data: existingSherpa } = await supabase
+      .from('sherpas')
+      .select('id')
+      .eq('profile_id', application.profile_id)
+      .eq('community_id', application.community_id)
+      .single()
+
+    if (!existingSherpa) {
+      const { error: sherpaError } = await supabase
+        .from('sherpas')
+        .insert({
+          profile_id: application.profile_id,
+          community_id: application.community_id,
+          application_id: application.id,
+          specialties: application.preferred_activities || [],
+          bio: application.application_text,
+          is_active: true,
+        })
+
+      if (sherpaError) {
+        // Log error but don't fail the approval
+        console.error('Failed to create Sherpa profile:', sherpaError)
+      }
+    }
+  }
+
+  revalidatePath('/protected/admin')
+  revalidatePath('/sherpa')
+  return { success: true }
+}

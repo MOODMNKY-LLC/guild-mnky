@@ -1,9 +1,10 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { isAdmin } from '@/lib/auth-helpers'
+import { isAdmin, isOfficerOrAdmin } from '@/lib/auth-helpers'
 import { AdminPanelClient } from './admin-panel-client'
+import { AdminReviewApplications } from '@/components/sherpa/admin-review-applications'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Shield, AlertCircle } from 'lucide-react'
+import { Shield, AlertCircle, Users } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Suspense } from 'react'
 
@@ -31,10 +32,13 @@ async function AdminContent() {
     redirect('/auth/login')
   }
 
-  // Check if user is an admin using the role system
+  // Check if user is an admin for Platform Kit access
   const userIsAdmin = await isAdmin()
+  
+  // Check if user is officer or admin for Sherpa review access
+  const userIsOfficerOrAdmin = await isOfficerOrAdmin()
 
-  if (!userIsAdmin) {
+  if (!userIsAdmin && !userIsOfficerOrAdmin) {
     return (
       <div className="space-y-6">
         <Alert variant="destructive">
@@ -72,32 +76,55 @@ async function AdminContent() {
         </p>
       </header>
 
-      <Card className="border-border/60 bg-card/80">
-        <CardHeader>
-          <CardTitle className="font-display text-lg">Platform Kit</CardTitle>
-          <CardDescription>
-            Access all backend management tools in one place
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AdminPanelClient projectRef={projectRef} />
-        </CardContent>
-      </Card>
+      {userIsAdmin && (
+        <Card className="border-border/60 bg-card/80">
+          <CardHeader>
+            <CardTitle className="font-display text-lg">Platform Kit</CardTitle>
+            <CardDescription>
+              Access all backend management tools in one place
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AdminPanelClient projectRef={projectRef} />
+          </CardContent>
+        </Card>
+      )}
 
-      <Card className="border-border/60 bg-card/80">
-        <CardHeader>
-          <CardTitle className="font-display text-lg">Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>• <strong>Database:</strong> Browse tables, run queries, manage schema</p>
-          <p>• <strong>Storage:</strong> Upload files, manage buckets, set permissions</p>
-          <p>• <strong>Auth:</strong> Configure providers, manage users, view sessions</p>
-          <p>• <strong>Users:</strong> View user growth, manage profiles</p>
-          <p>• <strong>Secrets:</strong> Manage environment variables and API keys</p>
-          <p>• <strong>Logs:</strong> View application logs and errors</p>
-          <p>• <strong>Suggestions:</strong> Get AI-powered suggestions for optimization</p>
-        </CardContent>
-      </Card>
+      {userIsAdmin && (
+        <Card className="border-border/60 bg-card/80">
+          <CardHeader>
+            <CardTitle className="font-display text-lg">Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>• <strong>Database:</strong> Browse tables, run queries, manage schema</p>
+            <p>• <strong>Storage:</strong> Upload files, manage buckets, set permissions</p>
+            <p>• <strong>Auth:</strong> Configure providers, manage users, view sessions</p>
+            <p>• <strong>Users:</strong> View user growth, manage profiles</p>
+            <p>• <strong>Secrets:</strong> Manage environment variables and API keys</p>
+            <p>• <strong>Logs:</strong> View application logs and errors</p>
+            <p>• <strong>Suggestions:</strong> Get AI-powered suggestions for optimization</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {userIsOfficerOrAdmin && (
+        <Card className="border-border/60 bg-card/80">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              <CardTitle className="font-display text-lg">Sherpa Applications Review</CardTitle>
+            </div>
+            <CardDescription>
+              Review and manage Sherpa applications. Approve qualified candidates or reject with feedback.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Suspense fallback={<div className="py-8 text-center text-muted-foreground">Loading applications...</div>}>
+              <AdminReviewApplications />
+            </Suspense>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
