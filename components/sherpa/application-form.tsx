@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -26,12 +26,15 @@ import {
 import { createSherpaApplication, type CreateSherpaApplicationInput } from '@/app/(site)/sherpa/actions'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { BungieVerificationCheck } from './bungie-verification-check'
+import { createClient } from '@/lib/supabase/client'
 
 const applicationSchema = z.object({
-  application_text: z.string().min(50, 'Please provide at least 50 characters explaining why you want to be a Sherpa.').max(2000, 'Application text must be less than 2000 characters.'),
-  experience_level: z.string().optional(),
-  preferred_activities: z.string().optional(),
-  bungie_profile_url: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
+  motivation: z.string().min(50, 'Please provide at least 50 characters explaining why you want to be a Sherpa.').max(2000, 'Application text must be less than 2000 characters.'),
+  experience_level: z.string().min(1, 'Please select your experience level.'),
+  specialties: z.string().min(1, 'Please list your preferred activities.'),
+  availability: z.string().min(1, 'Please provide your availability.'),
+  discord_username: z.string().min(1, 'Please provide your Discord username.'),
 })
 
 type ApplicationFormValues = z.infer<typeof applicationSchema>
@@ -39,14 +42,41 @@ type ApplicationFormValues = z.infer<typeof applicationSchema>
 export function SherpaApplicationForm() {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [discordUsername, setDiscordUsername] = useState<string>('')
+  const supabase = createClient()
+
+  // Fetch user's Discord username from profile
+  useEffect(() => {
+    async function fetchDiscordUsername() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('display_name, username')
+        .eq('id', user.id)
+        .single()
+
+      if (profile?.display_name) {
+        setDiscordUsername(profile.display_name)
+        form.setValue('discord_username', profile.display_name)
+      } else if (profile?.username) {
+        setDiscordUsername(profile.username)
+        form.setValue('discord_username', profile.username)
+      }
+    }
+
+    fetchDiscordUsername()
+  }, [supabase])
 
   const form = useForm<ApplicationFormValues>({
     resolver: zodResolver(applicationSchema),
     defaultValues: {
-      application_text: '',
+      motivation: '',
       experience_level: '',
-      preferred_activities: '',
-      bungie_profile_url: '',
+      specialties: '',
+      availability: '',
+      discord_username: '',
     },
   })
 
@@ -54,12 +84,11 @@ export function SherpaApplicationForm() {
     setIsSubmitting(true)
     try {
       const input: CreateSherpaApplicationInput = {
-        application_text: values.application_text,
-        experience_level: values.experience_level || undefined,
-        preferred_activities: values.preferred_activities
-          ? values.preferred_activities.split(',').map(s => s.trim()).filter(Boolean)
-          : undefined,
-        bungie_profile_url: values.bungie_profile_url || undefined,
+        motivation: values.motivation,
+        experience_level: values.experience_level,
+        specialties: values.specialties,
+        availability: values.availability,
+        discord_username: values.discord_username,
       }
 
       const result = await createSherpaApplication(input)
@@ -81,28 +110,30 @@ export function SherpaApplicationForm() {
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <FormField
-          control={form.control}
-          name="application_text"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Why do you want to be a Sherpa?</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Tell us about your teaching philosophy, experience helping others, and what makes you a good Sherpa..."
-                  className="min-h-[120px]"
-                  {...field}
-                />
-              </FormControl>
-              <FormDescription>
-                Minimum 50 characters. Be specific about your experience and approach to teaching.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+    <>
+      <BungieVerificationCheck required={true} />
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <FormField
+            control={form.control}
+            name="motivation"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Why do you want to be a Sherpa?</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Tell us about your teaching philosophy, experience helping others, and what makes you a good Sherpa..."
+                    className="min-h-[120px]"
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Minimum 50 characters. Be specific about your experience and approach to teaching.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
         <FormField
           control={form.control}
@@ -130,46 +161,65 @@ export function SherpaApplicationForm() {
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="preferred_activities"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Preferred Activities</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="e.g., Raids, Dungeons, Nightfalls, PvP"
-                  {...field}
-                />
-              </FormControl>
-              <FormDescription>
-                Comma-separated list of activities you're comfortable teaching.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control}
+            name="specialties"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Specialties / Preferred Activities</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="e.g., Raids, Dungeons, Nightfalls, PvP"
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  List the activities you're comfortable teaching (comma-separated or single list).
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={form.control}
-          name="bungie_profile_url"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Bungie Profile URL (Optional)</FormLabel>
-              <FormControl>
-                <Input
-                  type="url"
-                  placeholder="https://www.bungie.net/7/en/User/Profile/..."
-                  {...field}
-                />
-              </FormControl>
-              <FormDescription>
-                Link to your Bungie.net profile to showcase your stats.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control}
+            name="availability"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Availability</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="e.g., Weekends 2-8 PM EST, Weekdays after 6 PM"
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  When are you typically available to run Sherpa sessions?
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="discord_username"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Discord Username</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="YourDiscordName#1234"
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Your Discord username (including discriminator if applicable).
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
         <div className="flex justify-end gap-2">
           <Button
@@ -183,8 +233,9 @@ export function SherpaApplicationForm() {
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Submitting...' : 'Submit Application'}
           </Button>
-        </div>
-      </form>
-    </Form>
+          </div>
+        </form>
+      </Form>
+    </>
   )
 }

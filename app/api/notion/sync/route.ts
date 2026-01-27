@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       tag: guide.tag,
       updated_at: guide.updatedAt,
       published: true,
-    })),
+    })) as any,
     { onConflict: "notion_id" },
   );
 

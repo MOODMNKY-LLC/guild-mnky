@@ -1,9 +1,6 @@
 ---
-description: League Rules - AI Context for POKE MNKY
-globs: 
-alwaysApply: true
+alwaysApply: false
 ---
-
 # League Rules - AI Context
 
 This file provides contextual awareness of league rules for AI assistants working on POKE MNKY.

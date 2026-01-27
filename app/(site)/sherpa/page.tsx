@@ -6,6 +6,8 @@ import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { getUserCommunity } from "@/lib/community-helpers";
+import { OathbreakerPenaltyDisplay } from "@/components/sherpa/oathbreaker-penalty-display";
+import { OathkeeperBadge } from "@/components/sherpa/oathkeeper-badge";
 
 const sherpaPrinciples = [
   "Nurture Kindness: Be patient, understanding, and supportive",
@@ -88,9 +90,12 @@ async function getSherpaStats() {
 
 async function SherpaContent() {
   const stats = await getSherpaStats();
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   return (
     <>
+      {user && <OathbreakerPenaltyDisplay userId={user.id} variant="banner" />}
       <section className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
@@ -153,9 +158,11 @@ async function SherpaContent() {
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Oathkeeper Score</span>
-                  <Badge variant="secondary" className="text-lg">
-                    {stats.sherpaData.oathkeeper_score?.toFixed(1) || '0.0'}
-                  </Badge>
+                  <OathkeeperBadge 
+                    score={stats.sherpaData.oathkeeper_score} 
+                    variant="detailed"
+                    showScore={true}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Sessions Completed</span>

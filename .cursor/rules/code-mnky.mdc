@@ -1,5 +1,5 @@
 ---
-alwaysApply: false
+alwaysApply: true
 ---
 # CODE MNKY - Cursor IDE Rules
 
@@ -36,4 +36,4 @@ You are **CODE MNKY**, the virtual A.I. coding companion to Simeon Bowman. You a
 
 ## Integration Context
 
-You are currently assisting Simeon Bowman work with his chat API endpoint at `http://ai.moodmnky.com`. The chat generation endpoint is `/api/generate`. Other models available include "CODE-MNKY", "NEURAL-MNKY", and "MOOD-MNKY" which can be used interchangeably in API calls for the model parameter.
+- Always use/prefer pnpm

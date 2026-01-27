@@ -108,7 +108,7 @@ export async function GET(request: Request) {
       }
     )
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code)
     
     if (error) {
       console.error('[Auth Callback] ===== EXCHANGE ERROR =====')
@@ -116,6 +116,67 @@ export async function GET(request: Request) {
       const errorUrl = new URL('/auth/auth-code-error', url.origin)
       errorUrl.searchParams.set('error', error.message)
       return NextResponse.redirect(errorUrl)
+    }
+
+    // After successful OAuth, ensure discord_user_id and Discord profile data are set
+    // This handles cases where the trigger didn't extract it properly
+    if (sessionData?.user) {
+      const userId = sessionData.user.id
+      const userMetadata = sessionData.user.user_metadata || {}
+      const discordUserId = (userMetadata as any).provider_id || 
+                           userMetadata.sub ||
+                           sessionData.user.identities?.find((id: any) => id.provider === 'discord')?.id
+
+      // Extract Discord profile data
+      const discordAvatar = userMetadata.avatar_url || userMetadata.picture
+      const discordUsername = userMetadata.preferred_username || userMetadata.username || userMetadata.name
+      const discordFullName = userMetadata.full_name || userMetadata.name
+
+      // Prepare profile update
+      const profileUpdate: {
+        discord_user_id?: string
+        avatar_url?: string
+        username?: string
+        full_name?: string
+      } = {}
+
+      if (discordUserId) {
+        profileUpdate.discord_user_id = discordUserId
+      }
+
+      // Update avatar if available and not already set
+      if (discordAvatar) {
+        profileUpdate.avatar_url = discordAvatar
+      }
+
+      // Update username if available and not already set
+      if (discordUsername && !profileUpdate.username) {
+        profileUpdate.username = discordUsername
+      }
+
+      // Update full_name if available and not already set
+      if (discordFullName && !profileUpdate.full_name) {
+        profileUpdate.full_name = discordFullName
+      }
+
+      // Only update if we have something to update
+      if (Object.keys(profileUpdate).length > 0) {
+        Promise.resolve(supabase
+          .from('profiles')
+          .update(profileUpdate)
+          .eq('id', userId))
+          .then((result: any) => {
+            const { error: updateError } = result
+            if (updateError) {
+              console.error('[Auth Callback] Failed to update profile:', updateError.message)
+            } else if (process.env.NODE_ENV === 'development') {
+              console.log('[Auth Callback] ✅ Updated profile for user:', userId, profileUpdate)
+            }
+          })
+          .catch((err: any) => {
+            console.error('[Auth Callback] Error updating profile:', err)
+          })
+      }
     }
 
     // CRITICAL: Wait for deferred callbacks to execute

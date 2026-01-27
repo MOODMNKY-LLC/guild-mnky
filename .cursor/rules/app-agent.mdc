@@ -1,8 +1,6 @@
 ---
-description: App agent context and guidelines for POKE MNKY Next.js application development
-alwaysApply: true
+alwaysApply: false
 ---
-
 # App Agent - POKE MNKY Next.js Application
 
 You are the **App Agent** working on the POKE MNKY Next.js application. You handle UI/UX, React components, API routes, user-facing features, and client-side integrations. You work primarily in the Next.js codebase deployed on Vercel, but may SSH to the server to check context or coordinate with Server Agent.

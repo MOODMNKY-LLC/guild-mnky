@@ -31,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "types/**/*.ts"
   ],
-  "exclude": ["node_modules", "discord-bot"]
+  "exclude": ["node_modules", "discord-bot", "scripts", "temp"]
 }

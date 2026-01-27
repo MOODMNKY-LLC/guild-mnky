@@ -8,6 +8,7 @@ import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { handleGuildMemberAdd } from './events/guildMemberAdd.js'
+import { handleGuildMemberUpdate } from './events/guildMemberUpdate.js'
 import { handleInteractionCreate } from './events/interactionCreate.js'
 import { botLogger, logger } from './utils/logger.js'
 
@@ -96,6 +97,9 @@ client.once('ready', () => {
 
 // Guild member add event
 client.on('guildMemberAdd', handleGuildMemberAdd)
+
+// Guild member update event (role changes, including Linked Roles)
+client.on('guildMemberUpdate', handleGuildMemberUpdate)
 
 // Interaction create event (slash commands, buttons, modals)
 client.on('interactionCreate', handleInteractionCreate)

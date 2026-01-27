@@ -128,10 +128,23 @@ export async function handleSherpaAdminReview(
     const sherpaRoleId = process.env.SHERPA_ROLE_ID
     if (sherpaRoleId && interaction.guild && application.profiles) {
       try {
-        const member = await interaction.guild.members.fetch((application.profiles as any).discord_user_id)
-        await member.roles.add(sherpaRoleId)
-      } catch (error) {
+        const discordUserId = (application.profiles as any).discord_user_id
+        if (!discordUserId) {
+          console.warn('Discord user ID not found in profile - skipping role assignment')
+        } else {
+          const member = await interaction.guild.members.fetch(discordUserId)
+          await member.roles.add(sherpaRoleId)
+          
+          // Sync role to database
+          const { syncDiscordRoles } = await import('../../utils/database.js')
+          const currentRoles = member.roles.cache.map(role => role.id)
+          await syncDiscordRoles(discordUserId, currentRoles)
+          
+          console.log(`✅ Assigned Sherpa role to ${member.user.tag} (${discordUserId})`)
+        }
+      } catch (error: any) {
         console.error('Error assigning Sherpa role:', error)
+        // Don't fail the approval if role assignment fails
       }
     }
   }
