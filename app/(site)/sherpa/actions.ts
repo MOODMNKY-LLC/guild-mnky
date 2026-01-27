@@ -492,14 +492,15 @@ export type SherpaApplicationWithProfile = {
   id: string
   profile_id: string
   community_id: string
-  application_text: string
-  experience_level: string | null
-  preferred_activities: string[] | null
-  bungie_profile_url: string | null
-  status: 'pending' | 'approved' | 'rejected' | 'suspended'
+  experience_level: string
+  specialties: string
+  availability: string
+  motivation: string
+  discord_username: string
+  status: 'pending' | 'approved' | 'denied'
   reviewed_by: string | null
   reviewed_at: string | null
-  rejection_reason: string | null
+  review_reason: string | null
   created_at: string
   updated_at: string
   profiles: {
@@ -540,14 +541,15 @@ export async function getSherpaApplicationsForAdmin() {
       id,
       profile_id,
       community_id,
-      application_text,
       experience_level,
-      preferred_activities,
-      bungie_profile_url,
+      specialties,
+      availability,
+      motivation,
+      discord_username,
       status,
       reviewed_by,
       reviewed_at,
-      rejection_reason,
+      review_reason,
       created_at,
       updated_at,
       profiles:profile_id (
@@ -574,7 +576,7 @@ export async function getSherpaApplicationsForAdmin() {
 
 export type UpdateSherpaApplicationStatusInput = {
   applicationId: string
-  status: 'approved' | 'rejected'
+  status: 'approved' | 'denied'
   reviewReason?: string
 }
 
@@ -623,7 +625,7 @@ export async function updateSherpaApplicationStatus(input: UpdateSherpaApplicati
       status: input.status,
       reviewed_by: user.id,
       reviewed_at: new Date().toISOString(),
-      rejection_reason: input.status === 'rejected' ? input.reviewReason || null : null,
+      review_reason: input.status === 'denied' ? input.reviewReason || null : null,
     })
     .eq('id', input.applicationId)
 
@@ -648,8 +650,8 @@ export async function updateSherpaApplicationStatus(input: UpdateSherpaApplicati
           profile_id: application.profile_id,
           community_id: application.community_id,
           application_id: application.id,
-          specialties: application.preferred_activities || [],
-          bio: application.application_text,
+          specialties: application.specialties,
+          availability: application.availability,
           is_active: true,
         })
 

@@ -73,7 +73,7 @@ export function AdminReviewApplications() {
       setSubmitting(true)
       await updateSherpaApplicationStatus({
         applicationId: selectedApplication.id,
-        status: pendingAction === 'approve' ? 'approved' : 'rejected',
+        status: pendingAction === 'approve' ? 'approved' : 'denied',
         reviewReason: reviewReason || undefined,
       })
 
@@ -97,8 +97,8 @@ export function AdminReviewApplications() {
         return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" />Pending</Badge>
       case 'approved':
         return <Badge variant="default" className="gap-1 bg-green-600"><CheckCircle2 className="h-3 w-3" />Approved</Badge>
-      case 'rejected':
-        return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Rejected</Badge>
+      case 'denied':
+        return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Denied</Badge>
       case 'suspended':
         return <Badge variant="destructive" className="gap-1">Suspended</Badge>
       default:
@@ -152,8 +152,8 @@ export function AdminReviewApplications() {
                     <TableRow>
                       <TableHead>Applicant</TableHead>
                       <TableHead>Experience</TableHead>
-                      <TableHead>Activities</TableHead>
-                      <TableHead>Application</TableHead>
+                      <TableHead>Specialties</TableHead>
+                      <TableHead>Motivation</TableHead>
                       <TableHead>Submitted</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -184,27 +184,14 @@ export function AdminReviewApplications() {
                             {app.experience_level || 'Not specified'}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          {app.preferred_activities && app.preferred_activities.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {app.preferred_activities.slice(0, 2).map((activity, idx) => (
-                                <Badge key={idx} variant="secondary" className="text-xs">
-                                  {activity}
-                                </Badge>
-                              ))}
-                              {app.preferred_activities.length > 2 && (
-                                <Badge variant="secondary" className="text-xs">
-                                  +{app.preferred_activities.length - 2}
-                                </Badge>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">None specified</span>
-                          )}
+                        <TableCell className="max-w-[200px]">
+                          <div className="text-sm truncate" title={app.specialties || 'Not specified'}>
+                            {app.specialties || 'Not specified'}
+                          </div>
                         </TableCell>
                         <TableCell className="max-w-[300px]">
-                          <div className="text-sm line-clamp-2" title={app.application_text}>
-                            {app.application_text}
+                          <div className="text-sm line-clamp-2" title={app.motivation}>
+                            {app.motivation}
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
@@ -282,8 +269,8 @@ export function AdminReviewApplications() {
                           {app.reviewed_at ? formatDate(app.reviewed_at) : '—'}
                         </TableCell>
                         <TableCell className="max-w-[300px]">
-                          <div className="text-sm text-muted-foreground line-clamp-2" title={app.rejection_reason || undefined}>
-                            {app.rejection_reason || '—'}
+                          <div className="text-sm text-muted-foreground line-clamp-2" title={app.review_reason || undefined}>
+                            {app.review_reason || '—'}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -325,27 +312,27 @@ export function AdminReviewApplications() {
                     <div className="text-sm">{selectedApplication.experience_level}</div>
                   </div>
                 )}
-                {selectedApplication.preferred_activities && selectedApplication.preferred_activities.length > 0 && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Preferred Activities</Label>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {selectedApplication.preferred_activities.map((activity, idx) => (
-                        <Badge key={idx} variant="secondary" className="text-xs">
-                          {activity}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 <div>
-                  <Label className="text-xs text-muted-foreground">Application Text</Label>
-                  <div className="text-sm mt-1 whitespace-pre-wrap">{selectedApplication.application_text}</div>
+                  <Label className="text-xs text-muted-foreground">Specialties</Label>
+                  <div className="text-sm">{selectedApplication.specialties}</div>
                 </div>
-                {selectedApplication.bungie_profile_url && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Availability</Label>
+                  <div className="text-sm">{selectedApplication.availability}</div>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Motivation</Label>
+                  <div className="text-sm mt-1 whitespace-pre-wrap">{selectedApplication.motivation}</div>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Discord Username</Label>
+                  <div className="text-sm">{selectedApplication.discord_username}</div>
+                </div>
+                {selectedApplication.discord_username && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">Bungie Profile</Label>
+                    <Label className="text-xs text-muted-foreground">Discord</Label>
                     <a
-                      href={selectedApplication.bungie_profile_url}
+                      href={`https://discord.com/users/${selectedApplication.discord_username}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm text-primary hover:underline"
