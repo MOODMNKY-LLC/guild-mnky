@@ -91,6 +91,8 @@ export function BungieVerificationCheck({
           onVerified()
         }
         toast.success('Roles synced! Verification confirmed.')
+      } else if (data.verificationConfigured === false) {
+        toast.success('Roles synced. (Verification not configured in this environment.)')
       } else {
         toast.info('Roles synced, but Verified Guardian role not found. Make sure you claimed the role in Server Settings → Linked Roles.')
       }
