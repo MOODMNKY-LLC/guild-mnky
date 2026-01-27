@@ -28,9 +28,15 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { CheckCircle2, XCircle, Clock, Loader2, Shield } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, Loader2, Shield, RefreshCw } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Switch } from '@/components/ui/switch'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from '@/components/ui/tooltip'
 
 export function AdminReviewApplications() {
   const router = useRouter()
@@ -42,6 +48,7 @@ export function AdminReviewApplications() {
   const [pendingAction, setPendingAction] = useState<'approve' | 'reject' | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [showVerifiedOnly, setShowVerifiedOnly] = useState(false)
+  const [refreshingProfileId, setRefreshingProfileId] = useState<string | null>(null)
 
   useEffect(() => {
     loadApplications()
@@ -58,6 +65,29 @@ export function AdminReviewApplications() {
       toast.error(`Failed to load applications: ${error.message}`)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function refreshAvatar(profileId: string) {
+    try {
+      setRefreshingProfileId(profileId)
+      const res = await fetch('/api/admin/refresh-user-avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profileId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to refresh avatar')
+        return
+      }
+      toast.success('Avatar refreshed')
+      await loadApplications()
+      router.refresh()
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to refresh avatar')
+    } finally {
+      setRefreshingProfileId(null)
     }
   }
 
@@ -264,7 +294,7 @@ export function AdminReviewApplications() {
                       <TableHead>Verified</TableHead>
                       <TableHead>Reviewed By</TableHead>
                       <TableHead>Reviewed At</TableHead>
-                      <TableHead>Reason</TableHead>
+                      <TableHead title="Shown only for denied applications">Rejection reason</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -285,6 +315,28 @@ export function AdminReviewApplications() {
                                  app.discord_username || 
                                  'Unknown User'}
                               </div>
+                              {!app.profiles?.avatar_url && app.profiles?.discord_user_id && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 px-1.5 text-xs gap-1 mt-0.5"
+                                      onClick={() => refreshAvatar(app.profile_id)}
+                                      disabled={refreshingProfileId === app.profile_id}
+                                    >
+                                      {refreshingProfileId === app.profile_id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <RefreshCw className="h-3 w-3" />
+                                      )}
+                                      Refresh avatar
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Fetch avatar from Discord</TooltipContent>
+                                </Tooltip>
+                              )}
                             </div>
                           </div>
                         </TableCell>

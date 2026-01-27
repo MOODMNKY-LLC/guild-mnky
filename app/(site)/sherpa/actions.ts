@@ -995,6 +995,8 @@ export type SherpaApplicationWithProfile = {
     username: string | null
     full_name: string | null
     avatar_url: string | null
+    discord_user_id?: string | null
+    discord_role_ids?: string[] | null
   } | null
 }
 
@@ -1021,7 +1023,7 @@ export async function getSherpaApplicationsForAdmin() {
     throw new Error('Unauthorized: Admin or Officer access required')
   }
 
-  // Fetch all applications with profile information (bungie_verified requires migration 20260131000001)
+  // Fetch all applications with profile information (discord_role_ids for derived bungie_verified)
   const { data: applications, error } = await supabase
     .from('sherpa_applications')
     .select(`
@@ -1039,12 +1041,13 @@ export async function getSherpaApplicationsForAdmin() {
       review_reason,
       created_at,
       updated_at,
-      bungie_verified,
       profiles:profile_id (
         id,
         username,
         full_name,
-        avatar_url
+        avatar_url,
+        discord_user_id,
+        discord_role_ids
       )
     `)
     .order('created_at', { ascending: false })
@@ -1053,11 +1056,21 @@ export async function getSherpaApplicationsForAdmin() {
     throw new Error(`Failed to fetch applications: ${error.message}`)
   }
 
-  // Transform the data to match our type (Supabase returns profiles as array for relationships)
-  const transformedApplications: SherpaApplicationWithProfile[] = (applications || []).map((app: any) => ({
-    ...app,
-    profiles: Array.isArray(app.profiles) && app.profiles.length > 0 ? app.profiles[0] : null,
-  }))
+  const verifiedRoleId = (process.env.NEXT_PUBLIC_VERIFIED_GUARDIAN_ROLE_ID || '').trim()
+
+  // Transform and derive bungie_verified from profile.discord_role_ids (same logic as sync-discord-roles)
+  const transformedApplications: SherpaApplicationWithProfile[] = (applications || []).map((app: any) => {
+    const profile = Array.isArray(app.profiles) && app.profiles.length > 0 ? app.profiles[0] : null
+    const roleIds = profile?.discord_role_ids || []
+    const bungie_verified = verifiedRoleId
+      ? roleIds.some((id: string) => String(id).trim() === verifiedRoleId)
+      : true // backward compatibility when role not configured
+    return {
+      ...app,
+      bungie_verified,
+      profiles: profile,
+    }
+  })
 
   return { success: true, applications: transformedApplications }
 }
