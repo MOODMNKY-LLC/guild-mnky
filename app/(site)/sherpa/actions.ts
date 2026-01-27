@@ -993,7 +993,7 @@ export async function getSherpaApplicationsForAdmin() {
     throw new Error('Unauthorized: Admin or Officer access required')
   }
 
-  // Fetch all applications with profile information
+  // Fetch all applications with profile information (bungie_verified requires migration 20260131000001)
   const { data: applications, error } = await supabase
     .from('sherpa_applications')
     .select(`
@@ -1011,6 +1011,7 @@ export async function getSherpaApplicationsForAdmin() {
       review_reason,
       created_at,
       updated_at,
+      bungie_verified,
       profiles:profile_id (
         id,
         username,

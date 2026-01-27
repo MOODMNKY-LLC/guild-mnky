@@ -23,45 +23,45 @@ import { Suspense } from 'react'
  * Access is restricted to officers/admins only.
  */
 async function AdminContent() {
-  const supabase = await createClient()
-  
-  // Check authentication
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  
-  if (authError || !user) {
-    redirect('/auth/login')
-  }
+  try {
+    const supabase = await createClient()
 
-  // Check if user is an admin for Platform Kit access
-  const userIsAdmin = await isAdmin()
-  
-  // Check if user is officer or admin for Sherpa review access
-  const userIsOfficerOrAdmin = await isOfficerOrAdmin()
+    // Check authentication
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-  if (!userIsAdmin && !userIsOfficerOrAdmin) {
+    if (authError || !user) {
+      redirect('/auth/login')
+    }
+
+    // Check if user is an admin for Platform Kit access
+    const userIsAdmin = await isAdmin()
+
+    // Check if user is officer or admin for Sherpa review access
+    const userIsOfficerOrAdmin = await isOfficerOrAdmin()
+
+    if (!userIsAdmin && !userIsOfficerOrAdmin) {
+      return (
+        <div className="space-y-6">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Access Denied</AlertTitle>
+            <AlertDescription>
+              You must be an officer or admin to access the backend control panel.
+              If you believe this is an error, please contact a clan officer.
+            </AlertDescription>
+          </Alert>
+        </div>
+      )
+    }
+
+    // Extract project ref from Supabase URL (local dev vs production)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+    const projectRef = supabaseUrl.includes('localhost') || supabaseUrl.includes('127.0.0.1')
+      ? 'local'
+      : supabaseUrl.split('//')[1]?.split('.')[0] || 'local'
+
     return (
       <div className="space-y-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Access Denied</AlertTitle>
-          <AlertDescription>
-            You must be an officer or admin to access the backend control panel.
-            If you believe this is an error, please contact a clan officer.
-          </AlertDescription>
-        </Alert>
-      </div>
-    )
-  }
-
-  // Extract project ref from Supabase URL
-  // For local dev, use the project ref from env or extract from URL
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-  const projectRef = supabaseUrl.includes('localhost') || supabaseUrl.includes('127.0.0.1')
-    ? 'local' 
-    : supabaseUrl.split('//')[1]?.split('.')[0] || 'local'
-
-  return (
-    <div className="space-y-6">
       <header>
         <div className="flex items-center gap-3 mb-2">
           <Shield className="h-6 w-6 text-primary" />
@@ -125,8 +125,31 @@ async function AdminContent() {
           </CardContent>
         </Card>
       )}
-    </div>
-  )
+      </div>
+    )
+  } catch (e: unknown) {
+    // Rethrow Next.js redirect so navigation still works
+    if (
+      e &&
+      typeof e === 'object' &&
+      'digest' in e &&
+      (e as { digest?: string }).digest === 'NEXT_REDIRECT'
+    ) {
+      throw e
+    }
+    return (
+      <div className="space-y-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Failed to load admin panel</AlertTitle>
+          <AlertDescription>
+            An error occurred while loading the admin panel. This may be a temporary
+            issue or a configuration problem. Please refresh the page or try again later.
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
 }
 
 export default async function AdminPage() {
