@@ -1,18 +1,35 @@
-import "server-only";
-import { createClient } from "@supabase/supabase-js";
+/**
+ * Admin Supabase Client
+ * 
+ * Uses service role key to bypass RLS for admin operations
+ * Only use this for server-side admin operations, never expose to client
+ */
 
-export function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SECRET_KEY;
+import { createClient } from '@supabase/supabase-js'
 
-  if (!url || !serviceKey) {
-    throw new Error("Missing Supabase admin credentials.");
+let adminClient: ReturnType<typeof createClient> | null = null
+
+export function getAdminClient() {
+  if (adminClient) {
+    return adminClient
   }
 
-  return createClient(url, serviceKey, {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables')
+  }
+
+  adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: {
-      persistSession: false,
       autoRefreshToken: false,
+      persistSession: false,
     },
-  });
+  })
+
+  return adminClient
 }
+
+// Export alias for backward compatibility
+export const createAdminClient = getAdminClient

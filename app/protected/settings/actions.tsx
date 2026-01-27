@@ -20,7 +20,7 @@ export async function syncNotionGuides() {
       tag: guide.tag,
       updated_at: guide.updatedAt,
       published: true,
-    })),
+    })) as any,
     { onConflict: "notion_id" },
   );
 

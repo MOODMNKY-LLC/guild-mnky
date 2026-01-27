@@ -4,15 +4,21 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/server'
 import { redirect } from 'next/navigation'
 import { getUserCommunity } from '@/lib/community-helpers'
+import { getMaxSeekers } from '@/lib/sherpa/activity-limits'
+import { checkBungieVerificationServer, getVerificationErrorMessage } from '@/lib/sherpa/verification'
 
 // ============================================================================
 // Sherpa Application Actions
 // ============================================================================
 
 export type CreateSherpaApplicationInput = {
-  application_text: string
+  application_text?: string // Legacy field name
+  motivation?: string // New field name (preferred)
   experience_level?: string
-  preferred_activities?: string[]
+  specialties?: string
+  availability?: string
+  discord_username?: string
+  preferred_activities?: string[] // Legacy field name
   bungie_profile_url?: string
 }
 
@@ -165,6 +171,53 @@ export async function cancelSherpaRequest(requestId: string) {
 }
 
 // ============================================================================
+// Oathbreaker Penalty Actions
+// ============================================================================
+
+/**
+ * Check if user has active Oathbreaker penalties
+ * Returns penalty info if active, null if none
+ */
+export async function checkActivePenalties(userId: string) {
+  const supabase = await createClient()
+  
+  const { data: penalties, error } = await supabase
+    .from('oathbreaker_penalties')
+    .select('id, penalty_type, penalty_start, penalty_end, reason')
+    .eq('profile_id', userId)
+    .eq('is_active', true)
+    .gt('penalty_end', new Date().toISOString()) // Only active penalties
+    .order('penalty_end', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error('Error checking penalties:', error)
+    return null
+  }
+
+  return penalties || null
+}
+
+/**
+ * Get time remaining until penalty expires
+ * Returns milliseconds until expiration, or 0 if no active penalty
+ */
+export async function getPenaltyCooldown(userId: string): Promise<number> {
+  const penalty = await checkActivePenalties(userId)
+  
+  if (!penalty) {
+    return 0
+  }
+
+  const now = Date.now()
+  const endTime = new Date(penalty.penalty_end).getTime()
+  const remaining = endTime - now
+
+  return remaining > 0 ? remaining : 0
+}
+
+// ============================================================================
 // Sherpa Session Actions
 // ============================================================================
 
@@ -175,7 +228,10 @@ export type CreateSherpaSessionInput = {
   difficulty?: string
   scheduled_start: string // ISO 8601 datetime string
   scheduled_end?: string // ISO 8601 datetime string
-  seeker_ids: string[] // Array of profile IDs
+  seeker_ids?: string[] // Array of profile IDs (OPTIONAL - can be empty for open enrollment)
+  description?: string
+  enrollment_closes_at?: string // ISO 8601 datetime string
+  is_open_for_enrollment?: boolean // Default true
 }
 
 export async function createSherpaSession(input: CreateSherpaSessionInput) {
@@ -184,6 +240,17 @@ export async function createSherpaSession(input: CreateSherpaSessionInput) {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) {
     redirect('/auth/login')
+  }
+
+  // Check for active Oathbreaker penalties
+  const activePenalty = await checkActivePenalties(user.id)
+  if (activePenalty) {
+    const endTime = new Date(activePenalty.penalty_end)
+    const hoursRemaining = Math.ceil((endTime.getTime() - Date.now()) / (1000 * 60 * 60))
+    throw new Error(
+      `You have an active Oathbreaker penalty. You cannot create sessions until ${endTime.toLocaleString()}. ` +
+      `Time remaining: ${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}.`
+    )
   }
 
   // Verify user is a Sherpa
@@ -198,6 +265,20 @@ export async function createSherpaSession(input: CreateSherpaSessionInput) {
     throw new Error('You must be an active Sherpa to create sessions')
   }
 
+  // Calculate max_seekers based on activity type
+  const maxSeekers = getMaxSeekers(input.activity_type, input.activity_name)
+  
+  // Determine if session should be open for enrollment
+  const seekerIds = input.seeker_ids || []
+  const isOpenForEnrollment = input.is_open_for_enrollment ?? (seekerIds.length === 0)
+  
+  // Determine initial status
+  // If open for enrollment and no Seekers, use 'open_for_enrollment' status
+  // Otherwise, use 'scheduled' status
+  const initialStatus = isOpenForEnrollment && seekerIds.length === 0 
+    ? 'open_for_enrollment' 
+    : 'scheduled'
+
   // Create session
   const { data: session, error } = await supabase
     .from('sherpa_sessions')
@@ -210,14 +291,80 @@ export async function createSherpaSession(input: CreateSherpaSessionInput) {
       difficulty: input.difficulty || null,
       scheduled_start: input.scheduled_start,
       scheduled_end: input.scheduled_end || null,
-      status: 'scheduled',
-      seeker_ids: input.seeker_ids,
+      status: initialStatus,
+      seeker_ids: seekerIds,
+      max_seekers: maxSeekers,
+      is_open_for_enrollment: isOpenForEnrollment,
+      enrollment_closes_at: input.enrollment_closes_at || null,
+      description: input.description || null,
     })
     .select()
     .single()
 
   if (error) {
     throw new Error(`Failed to create session: ${error.message}`)
+  }
+
+  // Create participant records for pre-selected Seekers
+  if (seekerIds.length > 0) {
+    const participantInserts = seekerIds.map(seekerId => ({
+      session_id: session.id,
+      profile_id: seekerId,
+      role: 'seeker' as const,
+      joined_at: new Date().toISOString(),
+    }))
+    
+    await supabase
+      .from('sherpa_session_participants')
+      .insert(participantInserts)
+  }
+
+  // Create participant record for Sherpa
+  await supabase
+    .from('sherpa_session_participants')
+    .insert({
+      session_id: session.id,
+      profile_id: user.id,
+      role: 'sherpa',
+      joined_at: new Date().toISOString(),
+    })
+
+  // TODO: Create notifications for verified Seekers (Phase 3)
+  // Send Discord notification
+  try {
+    const { notifyDiscordSessionCreated } = await import('@/lib/sherpa/discord-webhook');
+    const { data: community } = await supabase
+      .from('communities')
+      .select('name')
+      .eq('id', sherpa.community_id)
+      .single();
+    
+    const { data: sherpaProfile } = await supabase
+      .from('profiles')
+      .select('display_name, username')
+      .eq('id', user.id)
+      .single();
+    
+    const sherpaName = sherpaProfile?.display_name || sherpaProfile?.username || 'A Sherpa';
+    const communityName = community?.name || 'Community';
+    const sessionUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/sherpa/sessions/${session.id}`;
+    
+    await notifyDiscordSessionCreated(
+      session.id,
+      input.activity_type,
+      input.activity_name || null,
+      input.difficulty || null,
+      input.scheduled_start,
+      input.enrollment_closes_at || null,
+      input.description || null,
+      maxSeekers,
+      sherpaName,
+      communityName,
+      sessionUrl
+    );
+  } catch (error) {
+    console.error('Error sending Discord notification:', error);
+    // Don't fail the session creation if Discord notification fails
   }
 
   // If linked to a request, update request status
@@ -234,6 +381,317 @@ export async function createSherpaSession(input: CreateSherpaSessionInput) {
 
   revalidatePath('/sherpa/sessions')
   return { success: true, session }
+}
+
+/**
+ * Join an open enrollment Sherpa session
+ * Requires Bungie verification (Verified Guardian role)
+ */
+export async function joinSherpaSession(sessionId: string) {
+  const supabase = await createClient()
+  
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    redirect('/auth/login')
+  }
+
+  // Check Bungie verification
+  const isVerified = await checkBungieVerificationServer(user.id, supabase)
+  if (!isVerified) {
+    throw new Error(getVerificationErrorMessage())
+  }
+
+  // Get session details
+  const { data: session, error: sessionError } = await supabase
+    .from('sherpa_sessions')
+    .select('id, seeker_ids, max_seekers, is_open_for_enrollment, status, community_id, sherpa_id, enrollment_closes_at, activity_type, activity_name, sherpas!inner(profile_id)')
+    .eq('id', sessionId)
+    .single()
+
+  if (sessionError || !session) {
+    throw new Error('Session not found')
+  }
+
+  // Verify session is open for enrollment
+  if (!session.is_open_for_enrollment) {
+    throw new Error('This session is not open for enrollment. Only pre-selected Seekers can join.')
+  }
+
+  if (session.status !== 'open_for_enrollment' && session.status !== 'scheduled') {
+    throw new Error(`Cannot join session with status: ${session.status}`)
+  }
+
+  // Check enrollment closing time
+  if (session.enrollment_closes_at) {
+    const closesAt = new Date(session.enrollment_closes_at)
+    if (new Date() > closesAt) {
+      throw new Error('Enrollment for this session has closed.')
+    }
+  }
+
+  const currentSeekers = session.seeker_ids || []
+  
+  // Check if session is full
+  if (currentSeekers.length >= session.max_seekers) {
+    throw new Error(`Session is full (${session.max_seekers}/${session.max_seekers} Seekers)`)
+  }
+
+  // Check if user is already enrolled
+  if (currentSeekers.includes(user.id)) {
+    throw new Error('You are already enrolled in this session')
+  }
+
+  // Check if user is the Sherpa (Sherpas can't join their own session as Seekers)
+  if ((session.sherpas as any).profile_id === user.id) {
+    throw new Error('You cannot join your own session as a Seeker')
+  }
+
+  // Check for active penalty
+  const activePenalty = await checkActivePenalties(user.id)
+  if (activePenalty) {
+    const endTime = new Date(activePenalty.penalty_end)
+    const hoursRemaining = Math.ceil((endTime.getTime() - Date.now()) / (1000 * 60 * 60))
+    throw new Error(
+      `You have an active Oathbreaker penalty. You cannot join sessions until ${endTime.toLocaleString()}. ` +
+      `Time remaining: ${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}.`
+    )
+  }
+
+  // Add seeker to session
+  const updatedSeekers = [...currentSeekers, user.id]
+  const { error: updateError } = await supabase
+    .from('sherpa_sessions')
+    .update({ seeker_ids: updatedSeekers })
+    .eq('id', sessionId)
+
+  if (updateError) {
+    throw new Error(`Failed to join session: ${updateError.message}`)
+  }
+
+  // Create participant record
+  const { error: participantError } = await supabase
+    .from('sherpa_session_participants')
+    .insert({
+      session_id: sessionId,
+      profile_id: user.id,
+      role: 'seeker',
+      joined_at: new Date().toISOString(),
+    })
+
+  if (participantError) {
+    // Rollback seeker_ids update if participant insert fails
+    await supabase
+      .from('sherpa_sessions')
+      .update({ seeker_ids: currentSeekers })
+      .eq('id', sessionId)
+    throw new Error(`Failed to create participant record: ${participantError.message}`)
+  }
+
+  // Notify Sherpa that Seeker joined
+  try {
+    const { notifySeekerJoined } = await import('@/lib/sherpa/notifications');
+    const { notifyDiscordSeekerJoined } = await import('@/lib/sherpa/discord-webhook');
+    
+    const { data: seekerProfile } = await supabase
+      .from('profiles')
+      .select('display_name, username')
+      .eq('id', user.id)
+      .single();
+    
+    const seekerName = seekerProfile?.display_name || seekerProfile?.username || 'A Seeker';
+    const { data: sherpaData } = await supabase
+      .from('sherpas')
+      .select('profile_id')
+      .eq('id', session.sherpa_id)
+      .single();
+    
+    if (sherpaData?.profile_id) {
+      await notifySeekerJoined(session.id, user.id, seekerName, sherpaData.profile_id);
+      
+      // Discord notification
+      const sessionUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/sherpa/sessions/${sessionId}`;
+      await notifyDiscordSeekerJoined(
+        sessionId,
+        session.activity_name || session.activity_type,
+        seekerName,
+        updatedSeekers.length,
+        session.max_seekers,
+        sessionUrl
+      );
+    }
+  } catch (error) {
+    console.error('Error notifying Sherpa:', error);
+    // Don't fail the join if notification fails
+  }
+
+  revalidatePath('/sherpa/sessions')
+  revalidatePath(`/sherpa/sessions/${sessionId}`)
+  return { success: true }
+}
+
+/**
+ * Leave a Sherpa session (Seeker only)
+ */
+export async function leaveSherpaSession(sessionId: string, reason?: string) {
+  const supabase = await createClient()
+  
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    redirect('/auth/login')
+  }
+
+  // Get session details
+  const { data: session, error: sessionError } = await supabase
+    .from('sherpa_sessions')
+    .select('id, seeker_ids, status, sherpa_id, sherpas!inner(profile_id)')
+    .eq('id', sessionId)
+    .single()
+
+  if (sessionError || !session) {
+    throw new Error('Session not found')
+  }
+
+  // Check if user is the Sherpa (Sherpas can't leave their own session)
+  if ((session.sherpas as any).profile_id === user.id) {
+    throw new Error('You cannot leave your own session. Cancel the session instead.')
+  }
+
+  const currentSeekers = session.seeker_ids || []
+  
+  // Check if user is enrolled
+  if (!currentSeekers.includes(user.id)) {
+    throw new Error('You are not enrolled in this session')
+  }
+
+  // Check if session has already started
+  if (session.status === 'in_progress' || session.status === 'completed') {
+    throw new Error('Cannot leave a session that has already started or completed')
+  }
+
+  // Remove seeker from session
+  const updatedSeekers = currentSeekers.filter((id: string) => id !== user.id)
+  const { error: updateError } = await supabase
+    .from('sherpa_sessions')
+    .update({ seeker_ids: updatedSeekers })
+    .eq('id', sessionId)
+
+  if (updateError) {
+    throw new Error(`Failed to leave session: ${updateError.message}`)
+  }
+
+  // Update participant record
+  const { error: participantError } = await supabase
+    .from('sherpa_session_participants')
+    .update({
+      left_at: new Date().toISOString(),
+      left_reason: reason || 'voluntary',
+    })
+    .eq('session_id', sessionId)
+    .eq('profile_id', user.id)
+
+  if (participantError) {
+    console.error('Failed to update participant record:', participantError)
+    // Don't throw - the main operation succeeded
+  }
+
+  // Notify Sherpa that Seeker left
+  try {
+    const { notifySeekerLeft } = await import('@/lib/sherpa/notifications');
+    const { data: seekerProfile } = await supabase
+      .from('profiles')
+      .select('display_name, username')
+      .eq('id', user.id)
+      .single();
+    
+    const seekerName = seekerProfile?.display_name || seekerProfile?.username || 'A Seeker';
+    const { data: sherpaData } = await supabase
+      .from('sherpas')
+      .select('profile_id')
+      .eq('id', session.sherpa_id)
+      .single();
+    
+    if (sherpaData?.profile_id) {
+      await notifySeekerLeft(session.id, user.id, seekerName, sherpaData.profile_id);
+    }
+  } catch (error) {
+    console.error('Error notifying Sherpa:', error);
+    // Don't fail the leave if notification fails
+  }
+
+  revalidatePath('/sherpa/sessions')
+  revalidatePath(`/sherpa/sessions/${sessionId}`)
+  return { success: true }
+}
+
+/**
+ * Remove a Seeker from a session (Sherpa only)
+ */
+export async function removeSeekerFromSession(
+  sessionId: string,
+  seekerId: string,
+  reason: string
+) {
+  const supabase = await createClient()
+  
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    redirect('/auth/login')
+  }
+
+  // Get session details and verify user is the Sherpa
+  const { data: session, error: sessionError } = await supabase
+    .from('sherpa_sessions')
+    .select('id, seeker_ids, status, sherpa_id, sherpas!inner(profile_id)')
+    .eq('id', sessionId)
+    .single()
+
+  if (sessionError || !session) {
+    throw new Error('Session not found')
+  }
+
+  // Verify user is the Sherpa
+  if ((session.sherpas as any).profile_id !== user.id) {
+    throw new Error('Only the Sherpa can remove Seekers from a session')
+  }
+
+  const currentSeekers = session.seeker_ids || []
+  
+  // Check if seeker is enrolled
+  if (!currentSeekers.includes(seekerId)) {
+    throw new Error('Seeker is not enrolled in this session')
+  }
+
+  // Remove seeker from session
+  const updatedSeekers = currentSeekers.filter((id: string) => id !== seekerId)
+  const { error: updateError } = await supabase
+    .from('sherpa_sessions')
+    .update({ seeker_ids: updatedSeekers })
+    .eq('id', sessionId)
+
+  if (updateError) {
+    throw new Error(`Failed to remove Seeker: ${updateError.message}`)
+  }
+
+  // Update participant record
+  const { error: participantError } = await supabase
+    .from('sherpa_session_participants')
+    .update({
+      left_at: new Date().toISOString(),
+      left_reason: reason || 'removed_by_sherpa',
+    })
+    .eq('session_id', sessionId)
+    .eq('profile_id', seekerId)
+
+  if (participantError) {
+    console.error('Failed to update participant record:', participantError)
+    // Don't throw - the main operation succeeded
+  }
+
+  // TODO: Notify removed Seeker (Phase 3)
+
+  revalidatePath('/sherpa/sessions')
+  revalidatePath(`/sherpa/sessions/${sessionId}`)
+  return { success: true }
 }
 
 export async function startSherpaSession(sessionId: string) {
@@ -499,6 +957,7 @@ export type SherpaApplicationWithProfile = {
   discord_username: string
   status: 'pending' | 'approved' | 'denied'
   reviewed_by: string | null
+  bungie_verified?: boolean
   reviewed_at: string | null
   review_reason: string | null
   created_at: string

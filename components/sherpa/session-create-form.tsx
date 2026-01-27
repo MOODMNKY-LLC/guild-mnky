@@ -26,6 +26,10 @@ import { createSherpaSession, type CreateSherpaSessionInput } from '@/app/(site)
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { OathbreakerPenaltyDisplay } from '@/components/sherpa/oathbreaker-penalty-display'
+import { getMaxSeekers, getActivityLimitDescription } from '@/lib/sherpa/activity-limits'
+import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 
 const sessionSchema = z.object({
   request_id: z.string().optional(),
@@ -34,7 +38,10 @@ const sessionSchema = z.object({
   difficulty: z.string().optional(),
   scheduled_start: z.string().min(1, 'Scheduled start time is required'),
   scheduled_end: z.string().optional(),
-  seeker_ids: z.array(z.string()).min(1, 'At least one seeker is required'),
+  seeker_ids: z.array(z.string()).optional(), // OPTIONAL - can be empty for open enrollment
+  description: z.string().optional(),
+  enrollment_closes_at: z.string().optional(),
+  is_open_for_enrollment: z.boolean().optional(),
 })
 
 type SessionFormValues = z.infer<typeof sessionSchema>
@@ -49,6 +56,8 @@ export function SessionCreateForm({ requestId, onSuccess }: SessionCreateFormPro
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [availableSeekers, setAvailableSeekers] = useState<Array<{ id: string; name: string }>>([])
   const [loadingSeekers, setLoadingSeekers] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [hasPenalty, setHasPenalty] = useState(false)
 
   const form = useForm<SessionFormValues>({
     resolver: zodResolver(sessionSchema),
@@ -60,8 +69,17 @@ export function SessionCreateForm({ requestId, onSuccess }: SessionCreateFormPro
       scheduled_start: '',
       scheduled_end: '',
       seeker_ids: [],
+      description: '',
+      enrollment_closes_at: '',
+      is_open_for_enrollment: true, // Required by schema
     },
+    mode: 'onChange',
   })
+
+  // Watch activity_type to show limit hints
+  const activityType = form.watch('activity_type')
+  const activityName = form.watch('activity_name')
+  const isOpenForEnrollment = form.watch('is_open_for_enrollment')
 
   useEffect(() => {
     async function loadRequestData() {
@@ -103,7 +121,10 @@ export function SessionCreateForm({ requestId, onSuccess }: SessionCreateFormPro
         difficulty: values.difficulty || undefined,
         scheduled_start: values.scheduled_start,
         scheduled_end: values.scheduled_end || undefined,
-        seeker_ids: values.seeker_ids,
+        seeker_ids: values.seeker_ids && values.seeker_ids.length > 0 ? values.seeker_ids : undefined,
+        description: values.description || undefined,
+        enrollment_closes_at: values.enrollment_closes_at || undefined,
+        is_open_for_enrollment: values.is_open_for_enrollment ?? true,
       }
 
       const result = await createSherpaSession(input)
@@ -126,8 +147,10 @@ export function SessionCreateForm({ requestId, onSuccess }: SessionCreateFormPro
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+    <>
+      {currentUserId && <OathbreakerPenaltyDisplay userId={currentUserId} variant="banner" showDetails={true} />}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <FormField
           control={form.control}
           name="activity_type"
@@ -148,6 +171,11 @@ export function SessionCreateForm({ requestId, onSuccess }: SessionCreateFormPro
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
+              {activityType && (
+                <FormDescription>
+                  {getActivityLimitDescription(activityType, activityName)}
+                </FormDescription>
+              )}
               <FormMessage />
             </FormItem>
           )}
@@ -234,18 +262,82 @@ export function SessionCreateForm({ requestId, onSuccess }: SessionCreateFormPro
 
         <FormField
           control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Optional: Add details about the session, requirements, teaching focus, etc."
+                  rows={4}
+                  {...field}
+                />
+              </FormControl>
+              <FormDescription>
+                Provide additional context for Seekers about what to expect in this session.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="is_open_for_enrollment"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Open for Enrollment</FormLabel>
+                <FormDescription>
+                  Allow verified Seekers to discover and join this session. If disabled, only pre-selected Seekers can participate.
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        {isOpenForEnrollment && (
+          <FormField
+            control={form.control}
+            name="enrollment_closes_at"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Enrollment Closes At</FormLabel>
+                <FormControl>
+                  <Input
+                    type="datetime-local"
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Optional: Set a time when enrollment closes. If not set, enrollment closes when the session starts.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        <FormField
+          control={form.control}
           name="seeker_ids"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Seekers *</FormLabel>
+              <FormLabel>Pre-select Seekers (Optional)</FormLabel>
               <FormControl>
                 <div className="space-y-2">
-                  {field.value.map((seekerId, index) => (
+                  {(field.value || []).map((seekerId, index) => (
                     <div key={index} className="flex gap-2">
                       <Input
                         value={seekerId}
                         onChange={(e) => {
-                          const newSeekers = [...field.value]
+                          const newSeekers = [...(field.value || [])]
                           newSeekers[index] = e.target.value
                           field.onChange(newSeekers)
                         }}
@@ -256,7 +348,7 @@ export function SessionCreateForm({ requestId, onSuccess }: SessionCreateFormPro
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          const newSeekers = field.value.filter((_, i) => i !== index)
+                          const newSeekers = (field.value || []).filter((_, i) => i !== index)
                           field.onChange(newSeekers)
                         }}
                       >
@@ -269,7 +361,7 @@ export function SessionCreateForm({ requestId, onSuccess }: SessionCreateFormPro
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      field.onChange([...field.value, ''])
+                      field.onChange([...(field.value || []), ''])
                     }}
                   >
                     Add Seeker
@@ -277,7 +369,9 @@ export function SessionCreateForm({ requestId, onSuccess }: SessionCreateFormPro
                 </div>
               </FormControl>
               <FormDescription>
-                Profile IDs of Seekers participating in this session.
+                {isOpenForEnrollment 
+                  ? 'Optionally pre-select specific Seekers. Other verified Seekers can still join if slots are available.'
+                  : 'Select Seekers who can participate in this session. Required if enrollment is closed.'}
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -293,11 +387,17 @@ export function SessionCreateForm({ requestId, onSuccess }: SessionCreateFormPro
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={isSubmitting}>
+          <Button type="submit" disabled={isSubmitting || hasPenalty}>
             {isSubmitting ? 'Creating...' : 'Create Session'}
           </Button>
         </div>
       </form>
     </Form>
+    {hasPenalty && (
+      <div className="text-sm text-muted-foreground mt-4">
+        <p>You cannot create sessions while you have an active Oathbreaker penalty.</p>
+      </div>
+    )}
+    </>
   )
 }

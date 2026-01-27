@@ -10,6 +10,8 @@ import { startSherpaSession, completeSherpaSession } from "@/app/(site)/sherpa/a
 import { SessionActions } from "@/components/sherpa/session-actions";
 import { OathkeeperRatingForm } from "@/components/sherpa/oathkeeper-rating-form";
 import { SessionCreateForm } from "@/components/sherpa/session-create-form";
+import { OathbreakerPenaltyDisplay } from "@/components/sherpa/oathbreaker-penalty-display";
+import { OathkeeperBadge } from "@/components/sherpa/oathkeeper-badge";
 import {
   Dialog,
   DialogContent,
@@ -19,13 +21,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-async function getSherpaSessions() {
+async function getSherpaSessions(filter: 'all' | 'my' | 'available' = 'all') {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   
   const communityId = user ? await getUserCommunity(user.id) : null;
 
-  const { data: sessions } = await supabase
+  let query = supabase
     .from('sherpa_sessions')
     .select(`
       id,
@@ -38,6 +40,10 @@ async function getSherpaSessions() {
       actual_end,
       status,
       seeker_ids,
+      max_seekers,
+      is_open_for_enrollment,
+      enrollment_closes_at,
+      description,
       created_at,
       sherpas!inner (
         id,
@@ -51,14 +57,20 @@ async function getSherpaSessions() {
         )
       )
     `)
-    .eq('community_id', communityId || '')
+    .eq('community_id', communityId || '');
+
+  const { data: sessions } = await query
     .order('scheduled_start', { ascending: true })
-    .limit(20);
+    .limit(50);
 
   return {
     sessions: sessions || [],
     currentUserId: user?.id,
   };
+}
+
+function getSeekerCount(seekerIds: string[] | null): number {
+  return seekerIds?.length || 0;
 }
 
 function formatSessionTime(time: string | null) {
@@ -77,6 +89,8 @@ function getStatusBadgeVariant(status: string) {
   switch (status) {
     case 'scheduled':
       return 'default';
+    case 'open_for_enrollment':
+      return 'default';
     case 'in_progress':
       return 'secondary';
     case 'completed':
@@ -92,9 +106,25 @@ function getStatusBadgeVariant(status: string) {
 
 async function SessionsContent() {
   const { sessions, currentUserId } = await getSherpaSessions();
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Check for active penalties
+  let hasActivePenalty = false;
+  if (user) {
+    const { data: penalty } = await supabase
+      .from('oathbreaker_penalties')
+      .select('id')
+      .eq('profile_id', user.id)
+      .eq('is_active', true)
+      .gt('penalty_end', new Date().toISOString())
+      .maybeSingle();
+    hasActivePenalty = !!penalty;
+  }
 
   return (
     <>
+      {user && <OathbreakerPenaltyDisplay userId={user.id} variant="banner" />}
       <section className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
@@ -107,20 +137,29 @@ async function SessionsContent() {
             View and manage Sherpa sessions. Join scheduled sessions or track your progress.
           </p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button size="lg">Create Session</Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Create Sherpa Session</DialogTitle>
-              <DialogDescription>
-                Schedule a new teaching session. Link to a request or create a standalone session.
-              </DialogDescription>
-            </DialogHeader>
-            <SessionCreateForm />
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Link href="/sherpa/sessions/browse">
+            <Button variant="outline" size="lg">
+              Browse Available
+            </Button>
+          </Link>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button size="lg" disabled={hasActivePenalty}>
+                Create Session
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Create Sherpa Session</DialogTitle>
+                <DialogDescription>
+                  Schedule a new teaching session. Link to a request or create a standalone session.
+                </DialogDescription>
+              </DialogHeader>
+              <SessionCreateForm />
+            </DialogContent>
+          </Dialog>
+        </div>
       </section>
 
       <section className="mt-10">
@@ -135,7 +174,10 @@ async function SessionsContent() {
             {sessions.map((session: any) => {
               const sherpa = session.sherpas?.profiles;
               const isSherpa = currentUserId === session.sherpas?.profile_id;
-              const isSeeker = (session.seeker_ids as string[]).includes(currentUserId || '');
+              const isSeeker = (session.seeker_ids as string[])?.includes(currentUserId || '');
+              const currentSeekers = getSeekerCount(session.seeker_ids);
+              const maxSeekers = session.max_seekers || 5;
+              const hasAvailableSlots = currentSeekers < maxSeekers;
 
               return (
                 <Card key={session.id} className="border-border/60 bg-card/80">
@@ -153,6 +195,15 @@ async function SessionsContent() {
                           <Badge variant={getStatusBadgeVariant(session.status)}>
                             {session.status.replace('_', ' ')}
                           </Badge>
+                          {session.is_open_for_enrollment && (
+                            <Badge variant="default">Open Enrollment</Badge>
+                          )}
+                          <Badge variant="outline">
+                            {currentSeekers}/{maxSeekers} Seekers
+                          </Badge>
+                          {session.is_open_for_enrollment && !hasAvailableSlots && (
+                            <Badge variant="destructive">Full</Badge>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -160,10 +211,14 @@ async function SessionsContent() {
                   <CardContent className="space-y-4">
                     <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                       <span>Sherpa: {sherpa?.display_name || sherpa?.username || 'Unknown'}</span>
-                      {session.sherpas?.oathkeeper_score && (
+                      {session.sherpas?.oathkeeper_score !== null && session.sherpas?.oathkeeper_score !== undefined && (
                         <>
                           <span>•</span>
-                          <span>Oathkeeper: {session.sherpas.oathkeeper_score.toFixed(1)}</span>
+                          <OathkeeperBadge 
+                            score={session.sherpas.oathkeeper_score} 
+                            variant="detailed"
+                            showScore={true}
+                          />
                         </>
                       )}
                     </div>

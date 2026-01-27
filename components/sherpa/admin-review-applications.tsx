@@ -28,8 +28,9 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, Loader2, Shield } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Switch } from '@/components/ui/switch'
 
 export function AdminReviewApplications() {
   const router = useRouter()
@@ -40,6 +41,7 @@ export function AdminReviewApplications() {
   const [reviewReason, setReviewReason] = useState('')
   const [pendingAction, setPendingAction] = useState<'approve' | 'reject' | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [showVerifiedOnly, setShowVerifiedOnly] = useState(false)
 
   useEffect(() => {
     loadApplications()
@@ -125,8 +127,12 @@ export function AdminReviewApplications() {
     )
   }
 
-  const pendingApplications = applications.filter(app => app.status === 'pending')
-  const reviewedApplications = applications.filter(app => app.status !== 'pending')
+  const filteredApplications = showVerifiedOnly
+    ? applications.filter(app => app.bungie_verified)
+    : applications
+
+  const pendingApplications = filteredApplications.filter(app => app.status === 'pending')
+  const reviewedApplications = filteredApplications.filter(app => app.status !== 'pending')
 
   return (
     <div className="space-y-6">
@@ -154,6 +160,7 @@ export function AdminReviewApplications() {
                       <TableHead>Experience</TableHead>
                       <TableHead>Specialties</TableHead>
                       <TableHead>Motivation</TableHead>
+                      <TableHead>Verified</TableHead>
                       <TableHead>Submitted</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -166,15 +173,20 @@ export function AdminReviewApplications() {
                             <Avatar className="h-8 w-8">
                               <AvatarImage src={app.profiles?.avatar_url || undefined} />
                               <AvatarFallback>
-                                {app.profiles?.username?.[0]?.toUpperCase() || app.profiles?.full_name?.[0]?.toUpperCase() || '?'}
+                                {(app.profiles?.username || app.profiles?.full_name || app.discord_username || '?')[0]?.toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
                             <div>
                               <div className="font-medium">
-                                {app.profiles?.username || app.profiles?.full_name || 'Unknown User'}
+                                {app.profiles?.username || 
+                                 app.profiles?.full_name || 
+                                 app.discord_username || 
+                                 'Unknown User'}
                               </div>
-                              {app.profiles?.full_name && app.profiles?.username && (
-                                <div className="text-xs text-muted-foreground">{app.profiles.full_name}</div>
+                              {(app.profiles?.full_name || app.discord_username) && app.profiles?.username && (
+                                <div className="text-xs text-muted-foreground">
+                                  {app.profiles.full_name || app.discord_username}
+                                </div>
                               )}
                             </div>
                           </div>
@@ -193,6 +205,19 @@ export function AdminReviewApplications() {
                           <div className="text-sm line-clamp-2" title={app.motivation}>
                             {app.motivation}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {app.bungie_verified ? (
+                            <Badge variant="default" className="gap-1 bg-green-600">
+                              <Shield className="h-3 w-3" />
+                              Verified
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="gap-1">
+                              <XCircle className="h-3 w-3" />
+                              Not Verified
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {formatDate(app.created_at)}
@@ -236,6 +261,7 @@ export function AdminReviewApplications() {
                     <TableRow>
                       <TableHead>Applicant</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Verified</TableHead>
                       <TableHead>Reviewed By</TableHead>
                       <TableHead>Reviewed At</TableHead>
                       <TableHead>Reason</TableHead>
@@ -249,18 +275,34 @@ export function AdminReviewApplications() {
                             <Avatar className="h-8 w-8">
                               <AvatarImage src={app.profiles?.avatar_url || undefined} />
                               <AvatarFallback>
-                                {app.profiles?.username?.[0]?.toUpperCase() || app.profiles?.full_name?.[0]?.toUpperCase() || '?'}
+                                {(app.profiles?.username || app.profiles?.full_name || app.discord_username || '?')[0]?.toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
                             <div>
                               <div className="font-medium">
-                                {app.profiles?.username || app.profiles?.full_name || 'Unknown User'}
+                                {app.profiles?.username || 
+                                 app.profiles?.full_name || 
+                                 app.discord_username || 
+                                 'Unknown User'}
                               </div>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           {getStatusBadge(app.status)}
+                        </TableCell>
+                        <TableCell>
+                          {app.bungie_verified ? (
+                            <Badge variant="default" className="gap-1 bg-green-600">
+                              <Shield className="h-3 w-3" />
+                              Verified
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="gap-1">
+                              <XCircle className="h-3 w-3" />
+                              Not Verified
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {app.reviewed_by ? 'Admin' : '—'}
@@ -302,10 +344,54 @@ export function AdminReviewApplications() {
               <div className="border rounded-lg p-4 space-y-3">
                 <div>
                   <Label className="text-xs text-muted-foreground">Applicant</Label>
-                  <div className="font-medium">
-                    {selectedApplication.profiles?.username || selectedApplication.profiles?.full_name || 'Unknown User'}
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={selectedApplication.profiles?.avatar_url || undefined} />
+                      <AvatarFallback>
+                        {(selectedApplication.profiles?.username || 
+                          selectedApplication.profiles?.full_name || 
+                          selectedApplication.discord_username || 
+                          '?')[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <div className="font-medium">
+                        {selectedApplication.profiles?.username || 
+                         selectedApplication.profiles?.full_name || 
+                         selectedApplication.discord_username || 
+                         'Unknown User'}
+                      </div>
+                      {selectedApplication.discord_username && (
+                        <div className="text-xs text-muted-foreground">
+                          Discord: {selectedApplication.discord_username}
+                        </div>
+                      )}
+                      {!selectedApplication.profiles?.avatar_url && selectedApplication.profiles?.id && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          ⚠️ Profile data missing - user may need to sign out and sign back in
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
+                {selectedApplication.bungie_verified !== undefined && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Bungie Verification</Label>
+                    <div>
+                      {selectedApplication.bungie_verified ? (
+                        <Badge variant="default" className="gap-1 bg-green-600">
+                          <Shield className="h-3 w-3" />
+                          Verified Guardian
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="gap-1">
+                          <XCircle className="h-3 w-3" />
+                          Not Verified
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {selectedApplication.experience_level && (
                   <div>
                     <Label className="text-xs text-muted-foreground">Experience</Label>

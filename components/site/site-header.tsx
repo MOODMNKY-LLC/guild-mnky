@@ -5,6 +5,7 @@ import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Button } from "@/components/ui/button";
 import { MobileNav } from "@/components/site/mobile-nav";
 import { PWAInstallButton } from "@/components/pwa-install-prompt";
+import { NotificationCenter } from "@/components/sherpa/notification-center";
 
 const navLinks = [
   { label: "Community", href: "/" },
@@ -52,6 +53,9 @@ export function SiteHeader() {
         <div className="flex items-center gap-2 sm:gap-3">
           <MobileNav links={navLinks} />
           <PWAInstallButton />
+          <Suspense fallback={<span className="text-xs">Loading...</span>}>
+            <NotificationCenter />
+          </Suspense>
           <Button asChild size="sm" className="hidden sm:inline-flex">
             <Link href="/protected">Enter HQ</Link>
           </Button>

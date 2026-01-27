@@ -162,3 +162,57 @@ export async function verifyDiscordMembership(
     return { verified: false, error: error.message }
   }
 }
+
+/**
+ * Sync Discord roles for a user profile
+ * Updates the profile's discord_role_ids and roles_synced_at timestamp
+ * Called by guildMemberUpdate event handler
+ */
+export async function syncDiscordRoles(
+  discordUserId: string,
+  discordRoleIds: string[]
+): Promise<{ success: boolean; profileId?: string; error?: string }> {
+  try {
+    // Find profile by discord_user_id
+    const { data: profile, error: findError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('discord_user_id', discordUserId)
+      .single()
+
+    if (findError || !profile) {
+      databaseLogger.warn(
+        { discordUserId, error: findError },
+        'Profile not found when syncing roles - user may not have logged into web app yet'
+      )
+      return { success: false, error: `Profile not found for Discord user ${discordUserId}` }
+    }
+
+    // Update profile with new roles
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        discord_role_ids: discordRoleIds,
+        roles_synced_at: new Date().toISOString(),
+      })
+      .eq('id', profile.id)
+
+    if (updateError) {
+      databaseLogger.error(
+        { error: updateError, discordUserId, profileId: profile.id },
+        'Failed to sync Discord roles to database'
+      )
+      return { success: false, error: `Failed to sync roles: ${updateError.message}` }
+    }
+
+    databaseLogger.debug(
+      { discordUserId, profileId: profile.id, roleCount: discordRoleIds.length },
+      'Successfully synced Discord roles to database'
+    )
+
+    return { success: true, profileId: profile.id }
+  } catch (error: any) {
+    databaseLogger.error({ error, discordUserId }, 'Error in syncDiscordRoles')
+    return { success: false, error: error.message }
+  }
+}
