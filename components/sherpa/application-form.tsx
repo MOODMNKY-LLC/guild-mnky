@@ -99,6 +99,10 @@ export function SherpaApplicationForm() {
         })
         router.push('/sherpa')
         router.refresh()
+      } else {
+        toast.error('Failed to submit application', {
+          description: result.error ?? 'Please try again later.',
+        })
       }
     } catch (error: any) {
       toast.error('Failed to submit application', {

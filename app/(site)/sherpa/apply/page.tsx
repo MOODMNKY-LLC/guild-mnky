@@ -6,46 +6,53 @@ import { redirect } from "next/navigation";
 import { getUserCommunity } from "@/lib/community-helpers";
 import { Suspense } from "react";
 
-async function checkApplicationStatus() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    redirect('/auth/login');
+async function checkApplicationStatus(): Promise<{ canApply: boolean; reason?: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      redirect('/auth/login');
+    }
+
+    const communityId = await getUserCommunity(user.id);
+    if (!communityId) {
+      return { canApply: false, reason: 'Unable to determine your community.' };
+    }
+
+    const { data: sherpa } = await supabase
+      .from('sherpas')
+      .select('id')
+      .eq('profile_id', user.id)
+      .eq('community_id', communityId)
+      .eq('is_active', true)
+      .single();
+
+    if (sherpa) {
+      return { canApply: false, reason: 'You are already an active Sherpa.' };
+    }
+
+    const { data: application } = await supabase
+      .from('sherpa_applications')
+      .select('id, status')
+      .eq('profile_id', user.id)
+      .eq('community_id', communityId)
+      .eq('status', 'pending')
+      .single();
+
+    if (application) {
+      return { canApply: false, reason: 'You already have a pending application.' };
+    }
+
+    return { canApply: true };
+  } catch (e: unknown) {
+    const err = e as { digest?: string } | null;
+    if (err && typeof err.digest === 'string' && err.digest === 'NEXT_REDIRECT') {
+      throw e;
+    }
+    console.error('Apply page checkApplicationStatus failed:', e);
+    return { canApply: false, reason: 'Something went wrong loading this page. Please try again.' };
   }
-
-  const communityId = await getUserCommunity(user.id);
-  if (!communityId) {
-    return { canApply: false, reason: 'Unable to determine your community.' };
-  }
-
-  // Check if already a Sherpa
-  const { data: sherpa } = await supabase
-    .from('sherpas')
-    .select('id')
-    .eq('profile_id', user.id)
-    .eq('community_id', communityId)
-    .eq('is_active', true)
-    .single();
-
-  if (sherpa) {
-    return { canApply: false, reason: 'You are already an active Sherpa.' };
-  }
-
-  // Check if has pending application
-  const { data: application } = await supabase
-    .from('sherpa_applications')
-    .select('id, status')
-    .eq('profile_id', user.id)
-    .eq('community_id', communityId)
-    .eq('status', 'pending')
-    .single();
-
-  if (application) {
-    return { canApply: false, reason: 'You already have a pending application.' };
-  }
-
-  return { canApply: true };
 }
 
 async function ApplyContent() {

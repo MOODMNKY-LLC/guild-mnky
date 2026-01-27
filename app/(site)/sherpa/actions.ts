@@ -22,7 +22,11 @@ export type CreateSherpaApplicationInput = {
   bungie_profile_url?: string
 }
 
-export async function createSherpaApplication(input: CreateSherpaApplicationInput) {
+export type CreateSherpaApplicationResult =
+  | { success: true; application: { id: string; [k: string]: unknown } }
+  | { success: false; error: string }
+
+export async function createSherpaApplication(input: CreateSherpaApplicationInput): Promise<CreateSherpaApplicationResult> {
   const supabase = await createClient()
   
   const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -33,7 +37,7 @@ export async function createSherpaApplication(input: CreateSherpaApplicationInpu
   // Get user's community
   const communityId = await getUserCommunity(user.id)
   if (!communityId) {
-    throw new Error('Unable to determine your community. Please ensure you are a member of a Discord guild.')
+    return { success: false, error: 'Unable to determine your community. Please ensure you are a member of a Discord guild.' }
   }
 
   // Check if user already has an application for this community
@@ -46,12 +50,35 @@ export async function createSherpaApplication(input: CreateSherpaApplicationInpu
 
   if (existing) {
     if (existing.status === 'pending') {
-      throw new Error('You already have a pending application for this community.')
+      return { success: false, error: 'You already have a pending application for this community.' }
     }
     if (existing.status === 'approved') {
-      throw new Error('You are already an approved Sherpa for this community.')
+      return { success: false, error: 'You are already an approved Sherpa for this community.' }
     }
     // If rejected, allow re-application
+  }
+
+  // Map to DB columns (sherpa_core_schema: motivation, experience_level, specialties, availability, discord_username)
+  const motivation = (input.motivation ?? input.application_text ?? '').trim()
+  const experienceLevel = (input.experience_level ?? '').trim()
+  const specialties = (input.specialties ?? '').trim()
+  const availability = (input.availability ?? '').trim()
+  const discordUsername = (input.discord_username ?? '').trim()
+
+  if (!motivation || motivation.length < 50) {
+    return { success: false, error: 'Please provide at least 50 characters explaining why you want to be a Sherpa.' }
+  }
+  if (!experienceLevel) {
+    return { success: false, error: 'Please select your experience level.' }
+  }
+  if (!specialties) {
+    return { success: false, error: 'Please list your preferred activities.' }
+  }
+  if (!availability) {
+    return { success: false, error: 'Please provide your availability.' }
+  }
+  if (!discordUsername) {
+    return { success: false, error: 'Please provide your Discord username.' }
   }
 
   // Create application
@@ -60,21 +87,22 @@ export async function createSherpaApplication(input: CreateSherpaApplicationInpu
     .insert({
       profile_id: user.id,
       community_id: communityId,
-      application_text: input.application_text,
-      experience_level: input.experience_level || null,
-      preferred_activities: input.preferred_activities || [],
-      bungie_profile_url: input.bungie_profile_url || null,
+      motivation,
+      experience_level: experienceLevel,
+      specialties,
+      availability,
+      discord_username: discordUsername,
       status: 'pending',
     })
     .select()
     .single()
 
   if (error) {
-    throw new Error(`Failed to create application: ${error.message}`)
+    return { success: false, error: `Failed to create application: ${error.message}` }
   }
 
   revalidatePath('/sherpa')
-  return { success: true, application }
+  return { success: true, application } as const
 }
 
 // ============================================================================
