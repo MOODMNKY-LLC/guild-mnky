@@ -8,7 +8,8 @@ import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import { AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
-const VERIFIED_GUARDIAN_ROLE_ID = process.env.NEXT_PUBLIC_VERIFIED_GUARDIAN_ROLE_ID
+// Trim at module load to match API behavior (env can have newline from Vercel CLI)
+const VERIFIED_GUARDIAN_ROLE_ID = (process.env.NEXT_PUBLIC_VERIFIED_GUARDIAN_ROLE_ID || '').trim() || undefined
 const DISCORD_GUILD_ID = process.env.NEXT_PUBLIC_DISCORD_GUILD_ID
 
 interface BungieVerificationCheckProps {
@@ -58,7 +59,10 @@ export function BungieVerificationCheck({
         return
       }
 
-      const verified = profile?.discord_role_ids?.includes(VERIFIED_GUARDIAN_ROLE_ID) ?? false
+      const expectedId = VERIFIED_GUARDIAN_ROLE_ID
+      const verified = expectedId
+        ? (profile?.discord_role_ids?.some((id: string) => String(id).trim() === expectedId) ?? false)
+        : true
       setHasVerifiedGuardian(verified)
       
       if (verified && onVerified) {
@@ -91,14 +95,15 @@ export function BungieVerificationCheck({
           onVerified()
         }
         toast.success('Roles synced! Verification confirmed.')
+        // Trust API — do not run checkVerification(); it can overwrite with false
+        // when client env (build-time NEXT_PUBLIC_*) differs from server or has trailing chars
       } else if (data.verificationConfigured === false) {
         toast.success('Roles synced. (Verification not configured in this environment.)')
+        await checkVerification()
       } else {
         toast.info('Roles synced, but Verified Guardian role not found. Make sure you claimed the role in Server Settings → Linked Roles.')
+        await checkVerification()
       }
-
-      // Re-check verification
-      await checkVerification()
     } catch (error: any) {
       toast.error(`Failed to sync roles: ${error.message}`)
     } finally {
