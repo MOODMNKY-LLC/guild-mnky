@@ -48,11 +48,12 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - auth/callback (OAuth callback route - MUST be excluded to avoid interfering with token exchange)
+     * - auth/bungie/* (Bungie auth routes manage their own redirects and state)
      * - api/auth/discord (OAuth initiation route - MUST be excluded to avoid interfering with code verifier cookie setting)
      * - Static assets (images, etc.)
      * Feel free to modify this pattern to include more paths.
      */
-    '/((?!_next/static|_next/image|favicon.ico|auth/callback|api/auth/discord|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|auth/callback|auth/bungie|api/auth/discord|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
 

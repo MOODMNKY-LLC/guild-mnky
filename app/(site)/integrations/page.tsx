@@ -1,9 +1,19 @@
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageShell } from "@/components/site/page-shell";
 
-const integrations = [
+type Integration = {
+  name: string;
+  status: string;
+  description: string;
+  actions: string[];
+  ctaLabel?: string;
+  ctaHref?: string;
+};
+
+const integrations: Integration[] = [
   {
     name: "Discord",
     status: "Primary",
@@ -24,6 +34,8 @@ const integrations = [
     description:
       "Opt-in linking for activity readiness, loadout snapshots, and seasonal progression.",
     actions: ["Bungie OAuth", "Readiness views", "Activity data"],
+    ctaLabel: "Link Bungie account",
+    ctaHref: "/auth/bungie/start",
   },
 ];
 
@@ -65,7 +77,7 @@ export default function IntegrationsPage() {
                 {integration.name}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <CardContent className="space-y-4 text-sm text-muted-foreground">
               <p>{integration.description}</p>
               <div className="flex flex-wrap gap-2">
                 {integration.actions.map((action) => (
@@ -77,6 +89,11 @@ export default function IntegrationsPage() {
                   </span>
                 ))}
               </div>
+              {integration.ctaHref && integration.ctaLabel ? (
+                <Button asChild variant="outline" size="sm" className="w-fit">
+                  <Link href={integration.ctaHref}>{integration.ctaLabel}</Link>
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
         ))}
